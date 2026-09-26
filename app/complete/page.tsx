@@ -57,7 +57,7 @@ export default function CompletePage() {
                 Please collect your prints from the output tray
               </p>
               <p className="text-sm text-text-muted">
-                Look for the tray marked "{printJob.kioskId}" on the right side
+                Look for the tray marked &quot;{printJob.kioskId}&quot; on the right side
               </p>
             </div>
           </div>
