@@ -5,11 +5,46 @@ import { usePrintJob } from '@/context/PrintJobContext';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SessionTimer } from '@/components/SessionTimer';
 import { useEffect, useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 export default function PreviewPage() {
   const router = useRouter();
   const { printJob } = usePrintJob();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [numPages, setNumPages] = useState<number>();
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [pageWidth, setPageWidth] = useState<number>(600);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const width = Math.min(window.innerWidth - 64, 600);
+      setPageWidth(width);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }): void {
+    setNumPages(numPages);
+    setPageNumber(1);
+  }
+
+  function changePage(offset: number) {
+    setPageNumber(prevPageNumber => prevPageNumber + offset);
+  }
+
+  function previousPage() {
+    changePage(-1);
+  }
+
+  function nextPage() {
+    changePage(1);
+  }
 
   useEffect(() => {
     if (!printJob.document.file) {
@@ -76,13 +111,22 @@ export default function PreviewPage() {
 
           {/* Document Preview */}
           <div className="space-y-4 animate-on-scroll-scale" style={{ animationDelay: '0.1s' }}>
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-border">
-              {previewUrl && printJob.document.file.type === 'application/pdf' ? (
-                <iframe
-                  src={previewUrl}
-                  title={`Preview of ${printJob.document.name}`}
-                  className="w-full aspect-[8.5/11]"
-                />
+            <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-border flex justify-center">
+              {printJob.document.file.type === 'application/pdf' ? (
+                <Document
+                  file={printJob.document.file}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  loading={<div className="aspect-[8.5/11] flex items-center justify-center text-text-muted min-h-[400px]">Loading PDF...</div>}
+                  className="max-w-full"
+                >
+                  <Page
+                    pageNumber={pageNumber}
+                    width={pageWidth}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    className="max-w-full"
+                  />
+                </Document>
               ) : previewUrl ? (
                 <img
                   src={previewUrl}
@@ -90,27 +134,52 @@ export default function PreviewPage() {
                   className="w-full aspect-[8.5/11] object-contain"
                 />
               ) : (
-                <div className="aspect-[8.5/11] flex items-center justify-center text-text-muted">
+                <div className="aspect-[8.5/11] flex items-center justify-center text-text-muted min-h-[400px]">
                   Preparing preview...
                 </div>
               )}
             </div>
 
             {/* Page Navigation */}
-            {printJob.document.pages > 1 && (
+            {(numPages || printJob.document.pages) > 1 && printJob.document.file.type === 'application/pdf' && (
               <div className="flex items-center justify-center gap-4">
-                <button className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all disabled:opacity-30" disabled>
+                <button 
+                  onClick={previousPage}
+                  disabled={pageNumber <= 1}
+                  className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all disabled:opacity-30 disabled:hover:border-border cursor-pointer disabled:cursor-not-allowed"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="text-text-muted">1 / {printJob.document.pages}</span>
-                <button className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all">
+                <span className="text-text-muted">{pageNumber} / {numPages || printJob.document.pages}</span>
+                <button 
+                  onClick={nextPage}
+                  disabled={pageNumber >= (numPages || 1)}
+                  className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all disabled:opacity-30 disabled:hover:border-border cursor-pointer disabled:cursor-not-allowed"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               </div>
+            )}
+
+            {/* Fallback for non-PDFs */}
+            {printJob.document.file.type !== 'application/pdf' && printJob.document.pages > 1 && (
+               <div className="flex items-center justify-center gap-4">
+                 <button className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all disabled:opacity-30" disabled>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                   </svg>
+                 </button>
+                 <span className="text-text-muted">1 / {printJob.document.pages}</span>
+                 <button className="px-4 py-2 bg-surface-secondary border border-border rounded-lg text-text hover:border-primary transition-all disabled:opacity-30" disabled>
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                   </svg>
+                 </button>
+               </div>
             )}
           </div>
         </div>
