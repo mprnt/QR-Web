@@ -65,14 +65,14 @@ export default function PreviewPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border bg-surface/80 backdrop-blur-lg sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => router.push('/upload')}
-              className="flex items-center gap-2 text-text-muted hover:text-text"
+              className="flex items-center gap-2 text-text-muted hover:text-text transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Back
@@ -80,9 +80,9 @@ export default function PreviewPage() {
             <SessionTimer startTime={printJob.createdAt} />
           </div>
           <ProgressBar currentStep={2} totalSteps={5} />
-          <div className="text-center mt-4">
+          <div className="text-center mt-3">
             <h1 className="text-2xl font-bold text-text">Preview Document</h1>
-            <p className="text-text-muted mt-1">Step 2 of 5</p>
+            <p className="text-text-muted mt-0.5 text-sm">Step 2 of 5</p>
           </div>
         </div>
       </div>
@@ -110,7 +110,7 @@ export default function PreviewPage() {
           </div>
 
           {/* Document Preview */}
-          <div className="space-y-4 animate-on-scroll-scale" style={{ animationDelay: '0.1s' }}>
+          <div className="space-y-4 animate-on-scroll-scale" style={{ animationDelay: '0.05s' }}>
             <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-border flex justify-center">
               {printJob.document.file.type === 'application/pdf' ? (
                 <Document
@@ -190,7 +190,7 @@ export default function PreviewPage() {
         <div className="max-w-2xl mx-auto flex gap-4">
           <button
             onClick={() => router.push('/settings')}
-            className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2"
+            className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
           >
             Continue
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

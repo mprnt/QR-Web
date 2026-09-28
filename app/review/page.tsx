@@ -73,14 +73,14 @@ export default function ReviewPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border bg-surface/80 backdrop-blur-lg sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => router.push('/settings')}
-              className="flex items-center gap-2 text-text-muted hover:text-text"
+              className="flex items-center gap-2 text-text-muted hover:text-text transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Back
@@ -88,9 +88,9 @@ export default function ReviewPage() {
             <SessionTimer startTime={printJob.createdAt} />
           </div>
           <ProgressBar currentStep={4} totalSteps={5} />
-          <div className="text-center mt-4">
+          <div className="text-center mt-3">
             <h1 className="text-2xl font-bold text-text">Review & Confirm</h1>
-            <p className="text-text-muted mt-1">Step 4 of 5</p>
+            <p className="text-text-muted mt-0.5 text-sm">Step 4 of 5</p>
           </div>
         </div>
       </div>
@@ -121,7 +121,7 @@ export default function ReviewPage() {
           </div>
 
           {/* Print Settings */}
-          <div className="bg-surface-secondary rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.1s' }}>
+          <div className="bg-surface-secondary rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.05s' }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-text">Print Settings</h2>
               <button
@@ -142,7 +142,7 @@ export default function ReviewPage() {
           </div>
 
           {/* Price Breakdown */}
-          <div className="bg-surface-secondary rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.2s' }}>
+          <div className="bg-surface-secondary rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.1s' }}>
             <h2 className="text-lg font-bold text-text mb-4">Price Breakdown</h2>
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2">
@@ -161,7 +161,7 @@ export default function ReviewPage() {
           </div>
 
           {/* Kiosk Info */}
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.3s' }}>
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.15s' }}>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,7 +193,7 @@ export default function ReviewPage() {
           <button
             onClick={handleProceedToPayment}
             disabled={isCreating}
-            className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
           >
             {isCreating ? (
               <>

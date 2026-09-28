@@ -155,15 +155,15 @@ export default function PaymentPage() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border">
+      <div className="p-4 border-b border-border bg-surface/80 backdrop-blur-lg sticky top-0 z-10">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <button
               onClick={() => router.push('/review')}
-              className="flex items-center gap-2 text-text-muted hover:text-text"
+              className="flex items-center gap-2 text-text-muted hover:text-text transition-colors"
               disabled={processing}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
               Back
@@ -171,9 +171,9 @@ export default function PaymentPage() {
             <SessionTimer startTime={printJob.createdAt} />
           </div>
           <ProgressBar currentStep={5} totalSteps={5} />
-          <div className="text-center mt-4">
+          <div className="text-center mt-3">
             <h1 className="text-2xl font-bold text-text">Payment</h1>
-            <p className="text-text-muted mt-1">Step 5 of 5</p>
+            <p className="text-text-muted mt-0.5 text-sm">Step 5 of 5</p>
           </div>
         </div>
       </div>
@@ -191,7 +191,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Payment Methods */}
-          <div className="animate-on-scroll" style={{ animationDelay: '0.1s' }}>
+          <div className="animate-on-scroll" style={{ animationDelay: '0.05s' }}>
             <h2 className="text-lg font-bold text-text mb-4">Select Payment Method</h2>
             <div className="space-y-4">
               <OptionCard
@@ -231,7 +231,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Security Info */}
-          <div className="bg-success/5 border border-success/20 rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.2s' }}>
+          <div className="bg-success/5 border border-success/20 rounded-xl p-6 animate-on-scroll" style={{ animationDelay: '0.1s' }}>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,7 +248,7 @@ export default function PaymentPage() {
           </div>
 
           {/* Session Info */}
-          <div className="text-center text-sm text-text-muted animate-on-scroll" style={{ animationDelay: '0.3s' }}>
+          <div className="text-center text-sm text-text-muted animate-on-scroll" style={{ animationDelay: '0.15s' }}>
             <p>Backend Session: {printJob.backendSessionId || printJob.sessionId}</p>
             <p className="mt-1">Kiosk: {printJob.kioskId}</p>
           </div>
@@ -261,7 +261,7 @@ export default function PaymentPage() {
           <button
             onClick={handlePayment}
             disabled={!selectedMethod || processing}
-            className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
           >
             {processing ? (
               <>

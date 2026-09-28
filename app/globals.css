@@ -68,7 +68,9 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  /* Prevent tap highlight flash on mobile */
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
@@ -78,16 +80,18 @@ a {
 
 button {
   font-family: inherit;
+  /* Faster touch response on mobile */
+  touch-action: manipulation;
 }
 
 /* ============================================================
-   SCROLL ANIMATIONS - VARIETY
+   PAGE TRANSITIONS - Faster, smoother feel
    ============================================================ */
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -98,7 +102,7 @@ button {
 @keyframes fadeInLeft {
   from {
     opacity: 0;
-    transform: translateX(-15px);
+    transform: translateX(-10px);
   }
   to {
     opacity: 1;
@@ -109,7 +113,7 @@ button {
 @keyframes fadeInRight {
   from {
     opacity: 0;
-    transform: translateX(15px);
+    transform: translateX(10px);
   }
   to {
     opacity: 1;
@@ -120,7 +124,7 @@ button {
 @keyframes scaleIn {
   from {
     opacity: 0;
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;
@@ -131,7 +135,7 @@ button {
 @keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -142,7 +146,7 @@ button {
 @keyframes slideInDown {
   from {
     opacity: 0;
-    transform: translateY(-30px);
+    transform: translateY(-16px);
   }
   to {
     opacity: 1;
@@ -153,7 +157,7 @@ button {
 @keyframes rotateIn {
   from {
     opacity: 0;
-    transform: rotate(-5deg) scale(0.95);
+    transform: rotate(-3deg) scale(0.97);
   }
   to {
     opacity: 1;
@@ -164,7 +168,7 @@ button {
 @keyframes blur-in {
   from {
     opacity: 0;
-    filter: blur(10px);
+    filter: blur(6px);
   }
   to {
     opacity: 1;
@@ -175,10 +179,10 @@ button {
 @keyframes popIn {
   0% {
     opacity: 0;
-    transform: scale(0.8);
+    transform: scale(0.85);
   }
-  50% {
-    transform: scale(1.05);
+  60% {
+    transform: scale(1.03);
   }
   100% {
     opacity: 1;
@@ -186,74 +190,75 @@ button {
   }
 }
 
+/* Reduced animation durations for snappier feel */
 .animate-on-scroll {
   opacity: 0;
-  animation: fadeInUp 0.6s ease-out forwards;
+  animation: fadeInUp 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-left {
   opacity: 0;
-  animation: fadeInLeft 0.6s ease-out forwards;
+  animation: fadeInLeft 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-right {
   opacity: 0;
-  animation: fadeInRight 0.6s ease-out forwards;
+  animation: fadeInRight 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-scale {
   opacity: 0;
-  animation: scaleIn 0.7s ease-out forwards;
+  animation: scaleIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-slide-up {
   opacity: 0;
-  animation: slideInUp 0.7s ease-out forwards;
+  animation: slideInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-slide-down {
   opacity: 0;
-  animation: slideInDown 0.7s ease-out forwards;
+  animation: slideInDown 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-rotate {
   opacity: 0;
-  animation: rotateIn 0.8s ease-out forwards;
+  animation: rotateIn 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-blur {
   opacity: 0;
-  animation: blur-in 0.8s ease-out forwards;
+  animation: blur-in 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .animate-on-scroll-pop {
   opacity: 0;
-  animation: popIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
-/* Stagger animations for multiple elements */
+/* Reduced stagger delays for faster cascade */
 .animate-stagger-1 {
-  animation-delay: 0.1s;
+  animation-delay: 0.04s;
 }
 
 .animate-stagger-2 {
-  animation-delay: 0.2s;
+  animation-delay: 0.08s;
 }
 
 .animate-stagger-3 {
-  animation-delay: 0.3s;
+  animation-delay: 0.12s;
 }
 
 .animate-stagger-4 {
-  animation-delay: 0.4s;
+  animation-delay: 0.16s;
 }
 
 .animate-stagger-5 {
-  animation-delay: 0.5s;
+  animation-delay: 0.2s;
 }
 
 .animate-stagger-6 {
-  animation-delay: 0.6s;
+  animation-delay: 0.24s;
 }
 
 /* High contrast for outdoor kiosk visibility */
@@ -262,4 +267,23 @@ button {
     --color-text: 0 0 0;
     --color-primary: 0 0 139;  /* Darker blue */
   }
+}
+
+/* ============================================================
+   GLOBAL UI POLISH
+   ============================================================ */
+
+/* Smoother scrolling momentum */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Better active states on interactive elements for mobile snappiness */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Prevent layout shift on page load */
+.min-h-screen {
+  min-height: 100dvh;
 }
