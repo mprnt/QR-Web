@@ -25,6 +25,13 @@ export default function ReviewPage() {
   const settingsDisplay = [
     { label: 'Color Mode', value: printJob.settings.colorMode === 'bw' ? 'Black & White' : 'Color' },
     { label: 'Copies', value: printJob.settings.copies },
+    {
+      label: 'Page Range',
+      value:
+        printJob.settings.pageRange === 'custom' && printJob.settings.customRange
+          ? printJob.settings.customRange
+          : `All (${printJob.document.pages})`,
+    },
     { label: 'Paper Size', value: printJob.settings.paperSize.toUpperCase() },
     { label: 'Orientation', value: printJob.settings.orientation.charAt(0).toUpperCase() + printJob.settings.orientation.slice(1) },
     { label: 'Print Sides', value: printJob.settings.printSides === 'single' ? 'Single-Sided' : 'Double-Sided' },

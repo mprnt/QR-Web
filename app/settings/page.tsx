@@ -4,13 +4,47 @@ import { useRouter } from 'next/navigation';
 import { usePrintJob } from '@/context/PrintJobContext';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SessionTimer } from '@/components/SessionTimer';
-import { Counter } from '@/components/Counter';
-import { OptionCard } from '@/components/OptionCard';
 import { useEffect } from 'react';
+
+interface SegmentedProps<T extends string> {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}
+
+// Label on the left, compact toggle group on the right — one row per setting.
+function SegmentedRow<T extends string>({ label, value, options, onChange }: SegmentedProps<T>) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <span className="text-sm text-text-muted">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex p-1 rounded-xl bg-surface-secondary border border-border">
+        {options.map((o) => {
+          const selected = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(o.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
+                selected ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text'
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const router = useRouter();
   const { printJob, updateSettings } = usePrintJob();
+  const { settings, document, pricing } = printJob;
 
   useEffect(() => {
     if (!printJob.document.file) {
@@ -21,6 +55,11 @@ export default function SettingsPage() {
   if (!printJob.document.file) {
     return null;
   }
+
+  const colorOptions = [
+    { value: 'bw' as const, label: 'B&W', price: '₹2 / page', swatch: 'bg-text' },
+    { value: 'color' as const, label: 'Colour', price: '₹10 / page', swatch: 'bg-gradient-to-br from-amber-500 via-red-500 to-primary' },
+  ];
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
@@ -47,150 +86,133 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Settings Area */}
-      <div className="flex-1 px-3 sm:px-4 py-4 overflow-y-auto pb-48">
-        <div className="max-w-2xl mx-auto space-y-6 sm:space-y-8">
-          {/* Color Mode */}
-          <div className="animate-on-scroll">
-            <h2 className="text-base sm:text-lg font-bold text-text mb-3 sm:mb-4">Color Mode</h2>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
-                }
-                title="Black & White"
-                description="Standard printing"
-                price="₹2/page"
-                selected={printJob.settings.colorMode === 'bw'}
-                onClick={() => updateSettings({ colorMode: 'bw' })}
-              />
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                  </svg>
-                }
-                title="Color"
-                description="Full color printing"
-                price="₹10/page"
-                selected={printJob.settings.colorMode === 'color'}
-                onClick={() => updateSettings({ colorMode: 'color' })}
-              />
-            </div>
+      {/* Settings */}
+      <div className="flex-1 px-4 py-5 overflow-y-auto pb-52">
+        <div className="max-w-2xl mx-auto animate-on-scroll">
+          {/* Colour mode */}
+          <div role="radiogroup" aria-label="Colour mode" className="grid grid-cols-2 gap-3 mb-3">
+            {colorOptions.map((o) => {
+              const selected = settings.colorMode === o.value;
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => updateSettings({ colorMode: o.value })}
+                  className={`flex items-center gap-3 rounded-2xl p-4 text-left transition-all ${
+                    selected ? 'border-2 border-primary bg-primary/10' : 'border border-border hover:border-primary/40'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-full flex-shrink-0 ${o.swatch}`} />
+                  <span>
+                    <span className="block font-bold text-text leading-tight">{o.label}</span>
+                    <span className="block text-sm text-text-muted">{o.price}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Number of Copies */}
-          <div className="animate-on-scroll" style={{ animationDelay: '0.05s' }}>
-            <h2 className="text-base sm:text-lg font-bold text-text mb-3 sm:mb-4">Number of Copies</h2>
-            <div className="bg-surface-secondary rounded-xl p-4 sm:p-6 flex items-center justify-center">
-              <Counter
-                value={printJob.settings.copies}
-                onChange={(value) => updateSettings({ copies: value })}
-                min={1}
-                max={10}
-              />
+          <div className="divide-y divide-border/60">
+            {/* Copies */}
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <span className="text-sm text-text-muted">Copies</span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  aria-label="Fewer copies"
+                  onClick={() => updateSettings({ copies: Math.max(1, settings.copies - 1) })}
+                  disabled={settings.copies <= 1}
+                  className="w-9 h-9 rounded-lg border border-border text-lg font-bold text-text flex items-center justify-center hover:border-primary disabled:opacity-30"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center text-lg font-bold text-text" aria-live="polite">
+                  {settings.copies}
+                </span>
+                <button
+                  type="button"
+                  aria-label="More copies"
+                  onClick={() => updateSettings({ copies: Math.min(10, settings.copies + 1) })}
+                  disabled={settings.copies >= 10}
+                  className="w-9 h-9 rounded-lg border border-border text-lg font-bold text-text flex items-center justify-center hover:border-primary disabled:opacity-30"
+                >
+                  +
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Paper Size */}
-          <div className="animate-on-scroll" style={{ animationDelay: '0.1s' }}>
-            <h2 className="text-base sm:text-lg font-bold text-text mb-3 sm:mb-4">Paper Size</h2>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                }
-                title="A4"
-                description="210 × 297 mm"
-                selected={printJob.settings.paperSize === 'a4'}
-                onClick={() => updateSettings({ paperSize: 'a4' })}
+            {/* Page range */}
+            <div>
+              <SegmentedRow
+                label="Page range"
+                value={settings.pageRange}
+                options={[
+                  { value: 'all', label: `All (${document.pages})` },
+                  { value: 'custom', label: 'Custom' },
+                ]}
+                onChange={(pageRange) => updateSettings({ pageRange })}
               />
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                }
-                title="Letter"
-                description="8.5 × 11 inches"
-                selected={printJob.settings.paperSize === 'letter'}
-                onClick={() => updateSettings({ paperSize: 'letter' })}
-              />
+              {settings.pageRange === 'custom' && (
+                <div className="pb-3">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={settings.customRange ?? ''}
+                    onChange={(e) => updateSettings({ customRange: e.target.value })}
+                    placeholder={`e.g. 1-3, 5 (of ${document.pages})`}
+                    aria-label="Pages to print"
+                    className="w-full px-4 py-3 rounded-xl bg-surface-secondary border border-border text-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Orientation */}
-          <div className="animate-on-scroll" style={{ animationDelay: '0.15s' }}>
-            <h2 className="text-base sm:text-lg font-bold text-text mb-3 sm:mb-4">Orientation</h2>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <OptionCard
-                icon={
-                  <div className="w-6 h-8 border-2 border-primary rounded"></div>
-                }
-                title="Portrait"
-                description="Vertical layout"
-                selected={printJob.settings.orientation === 'portrait'}
-                onClick={() => updateSettings({ orientation: 'portrait' })}
-              />
-              <OptionCard
-                icon={
-                  <div className="w-8 h-6 border-2 border-primary rounded"></div>
-                }
-                title="Landscape"
-                description="Horizontal layout"
-                selected={printJob.settings.orientation === 'landscape'}
-                onClick={() => updateSettings({ orientation: 'landscape' })}
-              />
-            </div>
-          </div>
+            <SegmentedRow
+              label="Paper size"
+              value={settings.paperSize}
+              options={[
+                { value: 'a4', label: 'A4' },
+                { value: 'letter', label: 'Letter' },
+              ]}
+              onChange={(paperSize) => updateSettings({ paperSize })}
+            />
 
-          {/* Print Sides */}
-          <div className="animate-on-scroll" style={{ animationDelay: '0.2s' }}>
-            <h2 className="text-base sm:text-lg font-bold text-text mb-3 sm:mb-4">Print Sides</h2>
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                }
-                title="Single-Sided"
-                description="Print on one side only"
-                selected={printJob.settings.printSides === 'single'}
-                onClick={() => updateSettings({ printSides: 'single' })}
-              />
-              <OptionCard
-                icon={
-                  <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                  </svg>
-                }
-                title="Double-Sided"
-                description="Print on both sides"
-                selected={printJob.settings.printSides === 'double'}
-                onClick={() => updateSettings({ printSides: 'double' })}
-              />
-            </div>
+            <SegmentedRow
+              label="Orientation"
+              value={settings.orientation}
+              options={[
+                { value: 'portrait', label: 'Portrait' },
+                { value: 'landscape', label: 'Landscape' },
+              ]}
+              onChange={(orientation) => updateSettings({ orientation })}
+            />
+
+            <SegmentedRow
+              label="Sides"
+              value={settings.printSides}
+              options={[
+                { value: 'single', label: 'Single' },
+                { value: 'double', label: 'Double' },
+              ]}
+              onChange={(printSides) => updateSettings({ printSides })}
+            />
           </div>
         </div>
       </div>
 
-      {/* Bottom Action Bar with Price */}
+      {/* Bottom bar: estimate + continue */}
       <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 shadow-lg">
         <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-3 mb-3">
             <div>
-              <div className="text-sm text-text-muted">Estimated Cost</div>
-              <div className="text-3xl font-bold text-text">₹{printJob.pricing.total}</div>
+              <div className="text-sm text-text-muted">Estimated cost</div>
+              <div className="text-sm text-text-muted">
+                {pricing.totalPages} pages · ₹{pricing.basePrice}/page
+              </div>
             </div>
-            <div className="text-right text-sm text-text-muted">
-              <div>{printJob.pricing.totalPages} pages</div>
-              <div>₹{printJob.pricing.basePrice}/page</div>
-            </div>
+            <div className="text-3xl font-black text-primary">₹{pricing.total}</div>
           </div>
           <button
             onClick={() => router.push('/review')}

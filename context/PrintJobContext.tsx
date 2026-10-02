@@ -96,12 +96,28 @@ const defaultPrintJob: PrintJob = {
   createdAt: 0,
 };
 
+// Counts distinct pages in input like "1-3, 5", ignoring anything outside 1..maxPage.
+function countPagesInRange(range: string, maxPage: number): number {
+  const pages = new Set<number>();
+  for (const part of range.split(',')) {
+    const match = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+    if (!match) continue;
+    const start = Number(match[1]);
+    const end = Number(match[2] ?? match[1]);
+    for (let p = Math.min(start, end); p <= Math.max(start, end); p++) {
+      if (p >= 1 && p <= maxPage) pages.add(p);
+    }
+  }
+  return pages.size;
+}
+
 function getPricing(settings: Settings, document: Document): Pricing {
   const pricePerPage = settings.colorMode === 'bw' ? 2 : 10;
   let totalPages = document.pages;
 
   if (settings.pageRange === 'custom' && settings.customRange) {
-    totalPages = settings.customRange.split(',').length;
+    const selected = countPagesInRange(settings.customRange, document.pages);
+    if (selected > 0) totalPages = selected;
   }
 
   if (settings.printSides === 'double') {
