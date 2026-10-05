@@ -4,7 +4,7 @@ import { usePrintJob } from '@/context/PrintJobContext';
 
 export function PriceDisplay() {
   const { printJob } = usePrintJob();
-  const { pricing } = printJob;
+  const { pricing, rates } = printJob;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 shadow-lg">
@@ -12,11 +12,11 @@ export function PriceDisplay() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <div className="text-sm text-text-muted">Total Cost</div>
-            <div className="text-3xl font-bold text-text">₹{pricing.total}</div>
+            <div className="text-3xl font-bold text-text">{rates ? `₹${pricing.total}` : '…'}</div>
           </div>
           <div className="text-right text-sm text-text-muted">
             <div>{pricing.totalPages} pages</div>
-            <div>₹{pricing.basePrice}/page</div>
+            {rates && <div>₹{pricing.basePrice}/page</div>}
           </div>
         </div>
       </div>

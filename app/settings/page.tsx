@@ -44,7 +44,7 @@ function SegmentedRow<T extends string>({ label, value, options, onChange }: Seg
 export default function SettingsPage() {
   const router = useRouter();
   const { printJob, updateSettings, hydrated } = usePrintJob();
-  const { settings, document, pricing } = printJob;
+  const { settings, document, pricing, rates } = printJob;
 
   const hasDocument = !!printJob.document.documentId;
 
@@ -59,8 +59,8 @@ export default function SettingsPage() {
   }
 
   const colorOptions = [
-    { value: 'bw' as const, label: 'B&W', price: '₹2 / page', swatch: 'bg-text' },
-    { value: 'color' as const, label: 'Colour', price: '₹10 / page', swatch: 'bg-gradient-to-br from-amber-500 via-red-500 to-primary' },
+    { value: 'bw' as const, label: 'B&W', price: rates ? `₹${rates.bwPerPage} / page` : '…', swatch: 'bg-text' },
+    { value: 'color' as const, label: 'Colour', price: rates ? `₹${rates.colorPerPage} / page` : '…', swatch: 'bg-gradient-to-br from-amber-500 via-red-500 to-primary' },
   ];
 
   return (
@@ -211,10 +211,10 @@ export default function SettingsPage() {
             <div>
               <div className="text-sm text-text-muted">Estimated cost</div>
               <div className="text-sm text-text-muted">
-                {pricing.totalPages} pages · ₹{pricing.basePrice}/page
+                {pricing.totalPages} pages{rates && ` · ₹${pricing.basePrice}/page`}
               </div>
             </div>
-            <div className="text-3xl font-black text-primary">₹{pricing.total}</div>
+            <div className="text-3xl font-black text-primary">{rates ? `₹${pricing.total}` : '…'}</div>
           </div>
           <button
             onClick={() => router.push('/review')}

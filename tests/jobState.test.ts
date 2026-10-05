@@ -22,6 +22,7 @@ function jobWithOrder(): PrintJob {
     ...defaultPrintJob,
     backendSessionId: 'sess-1',
     sessionToken: 'tok',
+    rates: { bwPerPage: 2, colorPerPage: 5, minCharge: 0 },
     document: { ...defaultPrintJob.document, documentId: 'doc-1', name: 'a.pdf', pages: 5 },
     printJobId: 'job-1',
     jobPricing: { pricePerPage: 2, totalPages: 5, totalAmount: 10 },
@@ -152,8 +153,8 @@ test('estimate uses the kiosk rates from the dashboard, per side and copy', () =
   assert.equal(withMin.total, 10);
 });
 
-test('default rates are ₹2 B/W and ₹5 colour', () => {
-  const document = { ...defaultPrintJob.document, pages: 1 };
-  assert.equal(getPricing(defaultPrintJob.settings, document).total, 2);
-  assert.equal(getPricing({ ...defaultPrintJob.settings, colorMode: 'color' }, document).total, 5);
+test('without backend rates there is no price, only the page count', () => {
+  const document = { ...defaultPrintJob.document, pages: 3 };
+  assert.deepEqual(getPricing(defaultPrintJob.settings, document, null), { basePrice: 0, totalPages: 3, total: 0 });
+  assert.equal(defaultPrintJob.rates, null, 'no hardcoded default rates');
 });

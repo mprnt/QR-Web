@@ -216,7 +216,7 @@ export default function ReviewPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2">
                 <span className="text-text-muted">Base Price per Page</span>
-                <span className="font-semibold text-text">₹{jobPricing ? jobPricing.pricePerPage : printJob.pricing.basePrice}</span>
+                <span className="font-semibold text-text">{jobPricing ? `₹${jobPricing.pricePerPage}` : printJob.rates ? `₹${printJob.pricing.basePrice}` : '…'}</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-text-muted">Total Pages</span>
@@ -236,7 +236,7 @@ export default function ReviewPage() {
                         {isSyncing ? 'Confirming final price…' : 'Final price not confirmed yet'}
                       </span>
                     </span>
-                    <span className="text-2xl font-bold text-text-muted">₹{printJob.pricing.total}</span>
+                    <span className="text-2xl font-bold text-text-muted">{printJob.rates ? `₹${printJob.pricing.total}` : '…'}</span>
                   </>
                 )}
               </div>

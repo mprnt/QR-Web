@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { homeHref, usePrintJob } from '@/context/PrintJobContext';
+import { chargedAmount } from '@/lib/jobState';
 import { useEffect } from 'react';
 
 export default function CompletePage() {
@@ -84,7 +85,7 @@ export default function CompletePage() {
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-text-muted">Amount Paid</span>
-                <span className="font-semibold text-primary">₹{printJob.pricing.total}</span>
+                <span className="font-semibold text-primary">₹{chargedAmount(printJob) ?? printJob.pricing.total}</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-text-muted">Transaction ID</span>
