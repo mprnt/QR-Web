@@ -6,6 +6,7 @@ import {
   chargedAmount,
   defaultPrintJob,
   fromStored,
+  getPricing,
   mergeServerSession,
   msUntil,
   needsJobSync,
@@ -36,7 +37,7 @@ test('settings change invalidates the job price and payment order (bug 1)', () =
   assert.equal(next.payment.order, undefined);
   assert.equal(next.payment.orderId, undefined);
   assert.equal(needsJobSync(next), true);
-  assert.equal(next.pricing.total, 50, 'estimate recomputed');
+  assert.equal(next.pricing.total, 25, 'estimate recomputed at the colour rate');
 });
 
 test('a settings "change" to the same value keeps the job', () => {
@@ -134,4 +135,25 @@ test('timer counts down to the backend expiresAt (bug 4)', () => {
   assert.equal(msUntil('2026-10-05T09:00:00.000Z', now), 0);
   assert.equal(msUntil(undefined, now), null);
   assert.equal(msUntil('garbage', now), null);
+});
+
+test('estimate uses the kiosk rates from the dashboard, per side and copy', () => {
+  const rates = { bwPerPage: 3, colorPerPage: 7, minCharge: 0 };
+  const document = { ...defaultPrintJob.document, pages: 5 };
+  const bw = getPricing({ ...defaultPrintJob.settings, copies: 2 }, document, rates);
+  assert.deepEqual(bw, { basePrice: 3, totalPages: 10, total: 30 });
+  const colorDouble = getPricing(
+    { ...defaultPrintJob.settings, colorMode: 'color', printSides: 'double', copies: 2 },
+    document,
+    rates
+  );
+  assert.deepEqual(colorDouble, { basePrice: 7, totalPages: 6, total: 42 });
+  const withMin = getPricing(defaultPrintJob.settings, { ...document, pages: 1 }, { ...rates, minCharge: 10 });
+  assert.equal(withMin.total, 10);
+});
+
+test('default rates are ₹2 B/W and ₹5 colour', () => {
+  const document = { ...defaultPrintJob.document, pages: 1 };
+  assert.equal(getPricing(defaultPrintJob.settings, document).total, 2);
+  assert.equal(getPricing({ ...defaultPrintJob.settings, colorMode: 'color' }, document).total, 5);
 });

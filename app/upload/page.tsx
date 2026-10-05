@@ -13,6 +13,7 @@ export default function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploaded, setUploaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Uploading needs a real backend session; without one, go back and get one.
@@ -21,6 +22,11 @@ export default function UploadPage() {
       router.replace(homeHref(printJob.kioskId));
     }
   }, [hydrated, printJob.backendSessionId, printJob.kioskId, router]);
+
+  // Load the preview page ahead of time so it opens the moment the upload is done.
+  useEffect(() => {
+    router.prefetch('/preview');
+  }, [router]);
 
   const handleFile = async (file: File) => {
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg'];
@@ -35,6 +41,7 @@ export default function UploadPage() {
     }
 
     setUploading(true);
+    setUploaded(false);
     setProgress(0);
 
     try {
@@ -63,7 +70,10 @@ export default function UploadPage() {
         processed: document.processed,
       });
 
-      setUploading(false);
+      // Stay on the progress view until the preview page takes over. Dropping
+      // back to the drop zone here flashed the upload screen for a second or two
+      // between 100% and the preview.
+      setUploaded(true);
       router.push('/preview');
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -133,7 +143,13 @@ export default function UploadPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
                 </div>
-                <p className="text-xl font-semibold text-text">Uploading...</p>
+                <p className="text-xl font-semibold text-text">
+                  {uploaded
+                    ? 'Uploaded! Opening preview…'
+                    : progress >= 100
+                      ? 'Preparing your document…'
+                      : 'Uploading...'}
+                </p>
                 <div className="w-full max-w-xs mx-auto bg-border/40 rounded-full h-2.5 overflow-hidden">
                   <div
                     className="bg-primary h-full rounded-full transition-all duration-200"

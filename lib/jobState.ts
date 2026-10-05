@@ -32,6 +32,19 @@ export interface Pricing {
   total: number;
 }
 
+/**
+ * Per-page rates for the kiosk, as published from the admin dashboard
+ * (GET /public/pricing). The defaults are the platform rates, used until the
+ * live ones arrive.
+ */
+export interface Rates {
+  bwPerPage: number;
+  colorPerPage: number;
+  minCharge: number;
+}
+
+export const DEFAULT_RATES: Rates = { bwPerPage: 2, colorPerPage: 5, minCharge: 0 };
+
 /** The price the backend computed for the print job. This is what gets charged. */
 export interface JobPricing {
   pricePerPage: number;
@@ -64,6 +77,7 @@ export interface PrintJob {
   document: Document;
   settings: Settings;
   pricing: Pricing;
+  rates: Rates;
   payment: Payment;
   status: 'draft' | 'pending' | 'processing' | 'complete' | 'error';
   createdAt: number;
@@ -99,10 +113,11 @@ export const defaultPrintJob: PrintJob = {
     printSides: 'single',
   },
   pricing: {
-    basePrice: 2,
+    basePrice: DEFAULT_RATES.bwPerPage,
     totalPages: 0,
     total: 0,
   },
+  rates: DEFAULT_RATES,
   payment: {
     status: 'pending',
   },
@@ -125,8 +140,9 @@ export function countPagesInRange(range: string, maxPage: number): number {
   return pages.size;
 }
 
-export function getPricing(settings: Settings, document: Document): Pricing {
-  const pricePerPage = settings.colorMode === 'bw' ? 2 : 10;
+/** Mirrors the backend's pricingService.calculatePrice. */
+export function getPricing(settings: Settings, document: Document, rates: Rates = DEFAULT_RATES): Pricing {
+  const pricePerPage = settings.colorMode === 'color' ? rates.colorPerPage : rates.bwPerPage;
   let totalPages = document.pages;
 
   if (settings.pageRange === 'custom' && settings.customRange) {
@@ -138,10 +154,11 @@ export function getPricing(settings: Settings, document: Document): Pricing {
     totalPages = Math.ceil(totalPages / 2);
   }
 
+  const chargedPages = totalPages * settings.copies;
   return {
     basePrice: pricePerPage,
-    totalPages: totalPages * settings.copies,
-    total: totalPages * pricePerPage * settings.copies,
+    totalPages: chargedPages,
+    total: Number(Math.max(chargedPages * pricePerPage, rates.minCharge).toFixed(2)),
   };
 }
 
@@ -165,7 +182,7 @@ export function applySettings(prev: PrintJob, patch: Partial<Settings>): PrintJo
   return {
     ...prev,
     settings,
-    pricing: getPricing(settings, prev.document),
+    pricing: getPricing(settings, prev.document, prev.rates),
     jobPricing: undefined,
     jobStale: prev.printJobId ? true : undefined,
     payment: clearOrder(prev.payment),
@@ -182,7 +199,7 @@ export function applyDocument(prev: PrintJob, patch: Partial<Document>): PrintJo
   return {
     ...prev,
     document,
-    pricing: getPricing(prev.settings, document),
+    pricing: getPricing(prev.settings, document, prev.rates),
     printJobId: undefined,
     jobPricing: undefined,
     jobStale: undefined,
@@ -227,6 +244,7 @@ export function fromStored(raw: string | null): PrintJob | null {
       document: { ...defaultPrintJob.document, ...stored.document, file: null },
       settings: { ...defaultPrintJob.settings, ...stored.settings },
       pricing: { ...defaultPrintJob.pricing, ...stored.pricing },
+      rates: { ...defaultPrintJob.rates, ...stored.rates },
       payment: { ...defaultPrintJob.payment, ...stored.payment },
     } as PrintJob;
   } catch {

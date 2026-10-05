@@ -4,7 +4,7 @@
  */
 
 import { APIError, handleResponse } from './http';
-import type { ServerSession } from '../jobState';
+import type { Rates, ServerSession } from '../jobState';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
@@ -69,6 +69,15 @@ export async function getSession(sessionId: string): Promise<GetSessionResponse[
     headers: authHeaders(),
   });
   const result = await handleResponse<GetSessionResponse>(response);
+  return result.data;
+}
+
+// ==================== PRICING ====================
+
+/** Rates in force at a kiosk, as set from the admin dashboard. */
+export async function getKioskRates(kioskId: string): Promise<Rates> {
+  const response = await fetch(`${API_BASE_URL}/public/pricing?kioskId=${encodeURIComponent(kioskId)}`);
+  const result = await handleResponse<{ status: string; data: Rates }>(response);
   return result.data;
 }
 

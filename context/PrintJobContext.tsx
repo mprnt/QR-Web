@@ -17,7 +17,7 @@ import {
   type PrintJob,
   type Settings,
 } from '@/lib/jobState';
-import { getSession, setSessionToken } from '@/lib/api/client';
+import { getKioskRates, getSession, setSessionToken } from '@/lib/api/client';
 
 export type { Document, JobPricing, Payment, Pricing, PrintJob, Settings } from '@/lib/jobState';
 
@@ -103,6 +103,26 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
     setSessionToken(printJob.sessionToken);
   }, [printJob.sessionToken]);
 
+  // Prices are set per kiosk from the admin dashboard, so fetch them rather
+  // than assume them. The estimate is recomputed as soon as they arrive.
+  useEffect(() => {
+    if (!hydrated || !printJob.kioskId) return;
+    let cancelled = false;
+    getKioskRates(printJob.kioskId)
+      .then((rates) => {
+        if (cancelled) return;
+        setPrintJob(prev => ({
+          ...prev,
+          rates,
+          pricing: getPricing(prev.settings, prev.document, rates),
+        }));
+      })
+      .catch((err) => console.warn('Could not load kiosk prices', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, printJob.kioskId]);
+
   const setBackendSession = useCallback((sessionId: string, expiresAt: string, sessionToken?: string) => {
     // Set synchronously too, so a call made right after this one is authorised.
     setSessionToken(sessionToken);
@@ -152,14 +172,14 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
   const calculatePrice = useCallback(() => {
     setPrintJob(prev => ({
       ...prev,
-      pricing: getPricing(prev.settings, prev.document),
+      pricing: getPricing(prev.settings, prev.document, prev.rates),
     }));
   }, []);
 
   // Keeps the kiosk so "print another" / "start over" can go straight back to it.
   const resetJob = useCallback(() => {
     setSessionToken(null);
-    setPrintJob(prev => ({ ...defaultPrintJob, kioskId: prev.kioskId }));
+    setPrintJob(prev => ({ ...defaultPrintJob, kioskId: prev.kioskId, rates: prev.rates }));
   }, []);
 
   const setKiosk = useCallback((kioskId: string) => {

@@ -19,6 +19,9 @@ export default function PaymentPage() {
   const { printJob, hydrated, updatePayment, updateStatus } = usePrintJob();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Razorpay has closed with a payment and we are verifying it. Without this the
+  // pay screen (still saying "Opening payment…") showed again until the redirect.
+  const [confirming, setConfirming] = useState(false);
 
   const hasDocument = !!printJob.document.documentId;
   const paid = printJob.payment.status === 'success';
@@ -31,17 +34,23 @@ export default function PaymentPage() {
   /** Money taken, job not queued (409 AMOUNT_MISMATCH): never show "paid", never invite a second payment. */
   const markMismatch = useCallback(() => {
     setProcessing(false);
+    setConfirming(false);
     updatePayment({ status: 'failed', amountMismatch: true });
   }, [updatePayment]);
 
   const markPaid = useCallback(
     (transactionId: string | undefined) => {
+      setConfirming(true);
       updatePayment({ transactionId, status: 'success' });
       updateStatus('processing');
-      setTimeout(() => router.push('/processing'), 500);
+      router.replace('/processing');
     },
     [router, updatePayment, updateStatus]
   );
+
+  useEffect(() => {
+    router.prefetch('/processing');
+  }, [router]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -78,6 +87,27 @@ export default function PaymentPage() {
     // Only on load / when the order changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, orderId]);
+
+  if (confirming || paid) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 text-center">
+        <svg className="animate-spin h-12 w-12 text-primary mb-6" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+        <h1 className="text-2xl font-bold text-text mb-2">
+          {paid ? 'Payment confirmed' : 'Confirming your payment…'}
+        </h1>
+        <p className="text-text-muted text-sm max-w-xs">
+          Please don&apos;t close this page or pay again. We&apos;re sending your document to the printer.
+        </p>
+      </div>
+    );
+  }
 
   if (!hasDocument || !jobReady || amount === null) {
     return null;
@@ -146,6 +176,7 @@ export default function PaymentPage() {
       // window to open.
       if (!isRealKey) {
         const payment = await simulatePaymentSuccess(order.orderId);
+        setConfirming(true);
         updatePayment({ paymentId: payment.paymentId });
 
         let verification;
@@ -190,6 +221,7 @@ export default function PaymentPage() {
           color: '#226d45',
         },
         handler: async (response: any) => {
+          setConfirming(true);
           updatePayment({ paymentId: response.razorpay_payment_id });
 
           try {
@@ -227,6 +259,7 @@ export default function PaymentPage() {
             // must not tell someone their payment failed, and must not invite
             // them to pay a second time.
             setProcessing(false);
+            setConfirming(false);
             updatePayment({ status: 'failed' });
             setError(
               'We could not confirm your payment. Please do not pay again — if you were ' +
@@ -264,6 +297,7 @@ export default function PaymentPage() {
 
       razorpay.open();
     } catch (err: any) {
+      setConfirming(false);
       stopProcessing(err?.message || 'Something went wrong starting the payment. Please try again.');
       updatePayment({ status: 'failed' });
       console.error('Payment failed to start', err);
