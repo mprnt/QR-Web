@@ -1,19 +1,26 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { usePrintJob } from '@/context/PrintJobContext';
+import { homeHref, usePrintJob } from '@/context/PrintJobContext';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SessionTimer } from '@/components/SessionTimer';
-import { useState, useRef } from 'react';
-import { uploadDocument } from '@/lib/api/client';
+import { useState, useRef, useEffect } from 'react';
+import { createSession, uploadDocument } from '@/lib/api/client';
 
 export default function UploadPage() {
   const router = useRouter();
-  const { updateDocument, printJob } = usePrintJob();
+  const { updateDocument, printJob, hydrated, setBackendSession } = usePrintJob();
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Uploading needs a real backend session; without one, go back and get one.
+  useEffect(() => {
+    if (hydrated && !printJob.backendSessionId) {
+      router.replace(homeHref(printJob.kioskId));
+    }
+  }, [hydrated, printJob.backendSessionId, printJob.kioskId, router]);
 
   const handleFile = async (file: File) => {
     const validTypes = ['application/pdf', 'image/png', 'image/jpeg'];
@@ -31,7 +38,16 @@ export default function UploadPage() {
     setProgress(0);
 
     try {
-      const sessionId = printJob.backendSessionId || printJob.sessionId;
+      let sessionId = printJob.backendSessionId;
+      if (!sessionId) throw new Error('Your session has ended. Please scan the kiosk QR code again.');
+
+      // The backend holds one document (and one print job) per session, so a
+      // different file needs a fresh session at the same kiosk.
+      if (printJob.document.documentId) {
+        const fresh = await createSession(printJob.kioskId);
+        setBackendSession(fresh.data.sessionId, fresh.data.expiresAt, fresh.data.sessionToken);
+        sessionId = fresh.data.sessionId;
+      }
 
       const document = await uploadDocument(sessionId, file, setProgress);
 
@@ -84,7 +100,7 @@ export default function UploadPage() {
               </svg>
               Back
             </button>
-            <SessionTimer startTime={printJob.createdAt} />
+            <SessionTimer />
           </div>
           <ProgressBar currentStep={1} totalSteps={5} />
           <div className="text-center mt-3">

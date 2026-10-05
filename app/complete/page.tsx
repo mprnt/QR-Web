@@ -1,22 +1,24 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { usePrintJob } from '@/context/PrintJobContext';
+import { homeHref, usePrintJob } from '@/context/PrintJobContext';
 import { useEffect } from 'react';
 
 export default function CompletePage() {
   const router = useRouter();
-  const { printJob, resetJob } = usePrintJob();
+  const { printJob, hydrated, resetJob } = usePrintJob();
 
   useEffect(() => {
-    if (!printJob.document.file || printJob.status !== 'complete') {
-      router.push('/');
+    if (hydrated && printJob.status !== 'complete') {
+      router.push(homeHref(printJob.kioskId));
     }
-  }, [printJob.document.file, printJob.status, router]);
+  }, [hydrated, printJob.status, printJob.kioskId, router]);
 
+  // Back to the same kiosk, so the customer does not have to rescan.
   const handleNewPrint = () => {
+    const href = homeHref(printJob.kioskId);
     resetJob();
-    router.push('/');
+    router.push(href);
   };
 
   return (
@@ -113,7 +115,7 @@ export default function CompletePage() {
 
           {/* Footer Info */}
           <div className="mt-8 space-y-2 text-sm text-text-muted animate-on-scroll" style={{ animationDelay: '0.4s' }}>
-            <p>Session ID: {printJob.sessionId}</p>
+            {printJob.payment.transactionId && <p>Transaction ID: {printJob.payment.transactionId}</p>}
             <p>Thank you for using MPrnt!</p>
           </div>
 

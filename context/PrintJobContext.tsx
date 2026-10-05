@@ -1,60 +1,30 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import {
+  applyDocument,
+  applySettings,
+  defaultPrintJob,
+  fromStored,
+  getPricing,
+  mergeServerSession,
+  STORAGE_KEY,
+  toStored,
+  type Document,
+  type JobPricing,
+  type Payment,
+  type Pricing,
+  type PrintJob,
+  type Settings,
+} from '@/lib/jobState';
+import { getSession, setSessionToken } from '@/lib/api/client';
 
-// Simplified context matching backend flow
-interface Document {
-  file: File | null;
-  name: string;
-  pages: number;
-  size: number;
-  // Backend references
-  documentId?: string;
-  fileType?: string;
-  processed?: boolean;
-}
-
-interface Settings {
-  colorMode: 'bw' | 'color';
-  pageRange: 'all' | 'custom';
-  customRange?: string;
-  copies: number;
-  orientation: 'portrait' | 'landscape';
-  paperSize: 'a4' | 'letter';
-  printSides: 'single' | 'double';
-}
-
-interface Pricing {
-  basePrice: number;
-  totalPages: number;
-  total: number;
-}
-
-interface Payment {
-  method?: 'upi' | 'card' | 'wallet';
-  transactionId?: string;
-  status: 'pending' | 'processing' | 'success' | 'failed';
-  orderId?: string;
-  paymentId?: string;
-}
-
-interface PrintJob {
-  sessionId: string;
-  kioskId: string;
-  document: Document;
-  settings: Settings;
-  pricing: Pricing;
-  payment: Payment;
-  status: 'draft' | 'pending' | 'processing' | 'complete' | 'error';
-  createdAt: number;
-  // Backend references
-  backendSessionId?: string;
-  printJobId?: string;
-  expiresAt?: string;
-}
+export type { Document, JobPricing, Payment, Pricing, PrintJob, Settings } from '@/lib/jobState';
 
 interface PrintJobContextType {
   printJob: PrintJob;
+  /** False until saved state has been read back after a page load. Guards wait for it. */
+  hydrated: boolean;
   updateDocument: (doc: Partial<Document>) => void;
   updateSettings: (settings: Partial<Settings>) => void;
   updatePricing: (pricing: Partial<Pricing>) => void;
@@ -62,79 +32,57 @@ interface PrintJobContextType {
   updateStatus: (status: PrintJob['status']) => void;
   calculatePrice: () => void;
   resetJob: () => void;
-  setBackendSession: (sessionId: string, expiresAt: string) => void;
-  setPrintJobId: (printJobId: string) => void;
+  setBackendSession: (sessionId: string, expiresAt: string, sessionToken?: string) => void;
+  setPrintJobId: (printJobId: string, pricing?: JobPricing) => void;
   setKiosk: (kioskId: string) => void;
-}
-
-const defaultPrintJob: PrintJob = {
-  sessionId: '',
-  kioskId: 'KIOSK001',
-  document: {
-    file: null,
-    name: '',
-    pages: 0,
-    size: 0,
-  },
-  settings: {
-    colorMode: 'bw',
-    pageRange: 'all',
-    copies: 1,
-    orientation: 'portrait',
-    paperSize: 'a4',
-    printSides: 'single',
-  },
-  pricing: {
-    basePrice: 2,
-    totalPages: 0,
-    total: 0,
-  },
-  payment: {
-    status: 'pending',
-  },
-  status: 'draft',
-  createdAt: 0,
-};
-
-// Counts distinct pages in input like "1-3, 5", ignoring anything outside 1..maxPage.
-function countPagesInRange(range: string, maxPage: number): number {
-  const pages = new Set<number>();
-  for (const part of range.split(',')) {
-    const match = part.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
-    if (!match) continue;
-    const start = Number(match[1]);
-    const end = Number(match[2] ?? match[1]);
-    for (let p = Math.min(start, end); p <= Math.max(start, end); p++) {
-      if (p >= 1 && p <= maxPage) pages.add(p);
-    }
-  }
-  return pages.size;
-}
-
-function getPricing(settings: Settings, document: Document): Pricing {
-  const pricePerPage = settings.colorMode === 'bw' ? 2 : 10;
-  let totalPages = document.pages;
-
-  if (settings.pageRange === 'custom' && settings.customRange) {
-    const selected = countPagesInRange(settings.customRange, document.pages);
-    if (selected > 0) totalPages = selected;
-  }
-
-  if (settings.printSides === 'double') {
-    totalPages = Math.ceil(totalPages / 2);
-  }
-
-  return {
-    basePrice: pricePerPage,
-    totalPages: totalPages * settings.copies,
-    total: totalPages * pricePerPage * settings.copies,
-  };
 }
 
 const PrintJobContext = createContext<PrintJobContextType | undefined>(undefined);
 
+function readStored(): PrintJob | null {
+  try {
+    return fromStored(window.sessionStorage.getItem(STORAGE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(job: PrintJob) {
+  try {
+    if (job.backendSessionId) {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStored(job)));
+    } else {
+      window.sessionStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    // Private mode or storage full: the app still works, it just cannot survive a reload.
+  }
+}
+
 export function PrintJobProvider({ children }: { children: ReactNode }) {
   const [printJob, setPrintJob] = useState<PrintJob>(defaultPrintJob);
+  const [hydrated, setHydrated] = useState(false);
+  const hydrating = useRef(false);
+
+  // Restore after a reload, then let the backend correct what it knows better
+  // (expiry, and above all whether the job was paid while the page was away).
+  useEffect(() => {
+    if (hydrating.current) return;
+    hydrating.current = true;
+
+    const stored = readStored();
+    if (stored) {
+      setSessionToken(stored.sessionToken);
+      setPrintJob(stored);
+    }
+    setHydrated(true);
+
+    if (stored?.backendSessionId) {
+      getSession(stored.backendSessionId)
+        .then((server) => setPrintJob((prev) => mergeServerSession(prev, server)))
+        .catch((err) => console.warn('Could not refresh session from backend', err));
+    }
+  }, []);
 
   useEffect(() => {
     if (printJob.createdAt !== 0) return;
@@ -147,83 +95,85 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
     }));
   }, [printJob.createdAt]);
 
-  const setBackendSession = (sessionId: string, expiresAt: string) => {
+  useEffect(() => {
+    if (hydrated) writeStored(printJob);
+  }, [hydrated, printJob]);
+
+  useEffect(() => {
+    setSessionToken(printJob.sessionToken);
+  }, [printJob.sessionToken]);
+
+  const setBackendSession = useCallback((sessionId: string, expiresAt: string, sessionToken?: string) => {
+    // Set synchronously too, so a call made right after this one is authorised.
+    setSessionToken(sessionToken);
     setPrintJob(prev => ({
       ...prev,
       backendSessionId: sessionId,
+      sessionToken,
       expiresAt,
     }));
-  };
+  }, []);
 
-  const setPrintJobId = (printJobId: string) => {
+  const setPrintJobId = useCallback((printJobId: string, pricing?: JobPricing) => {
     setPrintJob(prev => ({
       ...prev,
       printJobId,
+      jobPricing: pricing,
+      jobStale: undefined,
     }));
-  };
+  }, []);
 
-  const updateDocument = (doc: Partial<Document>) => {
-    setPrintJob(prev => {
-      const document = { ...prev.document, ...doc };
-      return {
-        ...prev,
-        document,
-        pricing: getPricing(prev.settings, document),
-      };
-    });
-  };
+  const updateDocument = useCallback((doc: Partial<Document>) => {
+    setPrintJob(prev => applyDocument(prev, doc));
+  }, []);
 
-  const updateSettings = (settings: Partial<Settings>) => {
-    setPrintJob(prev => {
-      const nextSettings = { ...prev.settings, ...settings };
-      return {
-        ...prev,
-        settings: nextSettings,
-        pricing: getPricing(nextSettings, prev.document),
-      };
-    });
-  };
+  const updateSettings = useCallback((settings: Partial<Settings>) => {
+    setPrintJob(prev => applySettings(prev, settings));
+  }, []);
 
-  const updatePricing = (pricing: Partial<Pricing>) => {
+  const updatePricing = useCallback((pricing: Partial<Pricing>) => {
     setPrintJob(prev => ({
       ...prev,
       pricing: { ...prev.pricing, ...pricing },
     }));
-  };
+  }, []);
 
-  const updatePayment = (payment: Partial<Payment>) => {
+  const updatePayment = useCallback((payment: Partial<Payment>) => {
     setPrintJob(prev => ({
       ...prev,
       payment: { ...prev.payment, ...payment },
     }));
-  };
+  }, []);
 
-  const updateStatus = (status: PrintJob['status']) => {
+  const updateStatus = useCallback((status: PrintJob['status']) => {
     setPrintJob(prev => ({ ...prev, status }));
-  };
+  }, []);
 
-  const calculatePrice = () => {
+  const calculatePrice = useCallback(() => {
     setPrintJob(prev => ({
       ...prev,
       pricing: getPricing(prev.settings, prev.document),
     }));
-  };
+  }, []);
 
-  const resetJob = () => {
-    setPrintJob(defaultPrintJob);
-  };
+  // Keeps the kiosk so "print another" / "start over" can go straight back to it.
+  const resetJob = useCallback(() => {
+    setSessionToken(null);
+    setPrintJob(prev => ({ ...defaultPrintJob, kioskId: prev.kioskId }));
+  }, []);
 
-  const setKiosk = (kioskId: string) => {
+  const setKiosk = useCallback((kioskId: string) => {
     setPrintJob(prev => ({
       ...prev,
       kioskId,
     }));
-  };
+  }, []);
 
   return (
     <PrintJobContext.Provider
       value={{
         printJob,
+        hydrated,
         updateDocument,
         updateSettings,
         updatePricing,
@@ -247,4 +197,9 @@ export function usePrintJob() {
     throw new Error('usePrintJob must be used within PrintJobProvider');
   }
   return context;
+}
+
+/** Where to send someone who has no usable session: back to their kiosk if known. */
+export function homeHref(kioskId: string | undefined): string {
+  return kioskId ? `/?kioskId=${encodeURIComponent(kioskId)}` : '/';
 }

@@ -21,7 +21,7 @@ export function KioskSelector({ onSelect, isLoading }: KioskSelectorProps) {
         const data = await listKiosks();
         setKiosks(data);
         if (data.length > 0) {
-          setSelectedId(data[0].id);
+          setSelectedId(data[0].kioskId);
         }
       } catch (err: any) {
         console.error('Failed to load kiosks:', err);
@@ -36,7 +36,7 @@ export function KioskSelector({ onSelect, isLoading }: KioskSelectorProps) {
 
   const handleSelect = () => {
     if (selectedId) {
-      const selected = kiosks.find(k => k.id === selectedId);
+      const selected = kiosks.find(k => k.kioskId === selectedId);
       if (selected) {
         onSelect(selected);
       }
@@ -106,10 +106,10 @@ export function KioskSelector({ onSelect, isLoading }: KioskSelectorProps) {
       <div className="grid gap-3">
         {kiosks.map((kiosk) => (
           <button
-            key={kiosk.id}
-            onClick={() => setSelectedId(kiosk.id)}
+            key={kiosk.kioskId}
+            onClick={() => setSelectedId(kiosk.kioskId)}
             className={`p-4 rounded-lg border-2 transition-all text-left ${
-              selectedId === kiosk.id
+              selectedId === kiosk.kioskId
                 ? 'border-primary bg-primary/5'
                 : 'border-border bg-surface-secondary hover:border-primary/50'
             }`}

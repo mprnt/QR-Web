@@ -4,6 +4,27 @@
  */
 
 type MessageHandler = (data: any) => void;
+
+const DEFAULT_API_URL = 'http://localhost:3000/api/v1';
+const WS_PATH = '/ws';
+
+/**
+ * Build the WebSocket URL. NEXT_PUBLIC_WS_URL wins when set. Otherwise it is
+ * derived from the API base URL (which already includes `/api/v1`): same host,
+ * same path prefix, ws/wss chosen from the API's own protocol, not the page's.
+ */
+export function getWsUrl(
+  apiBaseUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL,
+  override: string | undefined = process.env.NEXT_PUBLIC_WS_URL
+): string {
+  if (override) return override;
+  const url = new URL(apiBaseUrl || DEFAULT_API_URL);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = url.pathname.replace(/\/+$/, '') + WS_PATH;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
 type StatusUpdateHandler = (status: string, data?: any) => void;
 
 export class JobStatusWebSocket {
@@ -15,12 +36,9 @@ export class JobStatusWebSocket {
   private messageHandlers: Set<MessageHandler> = new Set();
   private statusHandlers: Set<StatusUpdateHandler> = new Set();
   private isConnecting = false;
-
-  private getUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:3000';
-    return `${protocol}//${host}/api/v1/ws`;
-  }
+  /** Set by disconnect(); stops onclose from reconnecting a socket we closed on purpose. */
+  private manuallyClosed = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Connect and subscribe to a job's status updates
@@ -39,17 +57,21 @@ export class JobStatusWebSocket {
 
       this.jobId = jobId;
       this.isConnecting = true;
+      this.manuallyClosed = false;
+      let settled = false;
 
       try {
-        this.ws = new WebSocket(this.getUrl());
+        const ws = new WebSocket(getWsUrl());
+        this.ws = ws;
 
-        this.ws.onopen = () => {
+        ws.onopen = () => {
+          settled = true;
           this.isConnecting = false;
           this.reconnectAttempts = 0;
           console.log('[WebSocket] Connected');
 
           // Subscribe to job
-          this.ws!.send(JSON.stringify({
+          ws.send(JSON.stringify({
             type: 'subscribe',
             jobId,
           }));
@@ -57,7 +79,7 @@ export class JobStatusWebSocket {
           resolve();
         };
 
-        this.ws.onmessage = (event) => {
+        ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
 
@@ -80,15 +102,21 @@ export class JobStatusWebSocket {
           }
         };
 
-        this.ws.onerror = (error) => {
+        ws.onerror = (error) => {
           this.isConnecting = false;
           console.error('[WebSocket] Error:', error);
-          reject(error);
+          // After a successful open the promise has already resolved; onclose
+          // follows and handles reconnecting.
+          if (!settled) {
+            settled = true;
+            reject(error);
+          }
         };
 
-        this.ws.onclose = () => {
+        ws.onclose = () => {
           console.log('[WebSocket] Disconnected');
-          this.attemptReconnect();
+          if (this.ws === ws) this.ws = null;
+          if (!this.manuallyClosed && this.jobId) this.attemptReconnect();
         };
       } catch (error) {
         this.isConnecting = false;
@@ -146,8 +174,9 @@ export class JobStatusWebSocket {
 
     console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
 
-    setTimeout(() => {
-      if (this.jobId) {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.jobId && !this.manuallyClosed) {
         this.subscribe(this.jobId).catch((error) => {
           console.error('[WebSocket] Reconnect failed:', error);
         });
@@ -166,9 +195,20 @@ export class JobStatusWebSocket {
    * Disconnect
    */
   disconnect(): void {
+    this.manuallyClosed = true;
+    this.jobId = null;
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
-      this.ws.close();
+      const ws = this.ws;
       this.ws = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.onmessage = null;
+      ws.close();
     }
     this.messageHandlers.clear();
     this.statusHandlers.clear();

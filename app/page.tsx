@@ -10,7 +10,7 @@ function LandingPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const kioskIdParam = searchParams.get('kioskId');
-  const { printJob, setBackendSession, setKiosk } = usePrintJob();
+  const { printJob, hydrated, setBackendSession, setKiosk, resetJob } = usePrintJob();
   const sessionRequestInFlight = useRef(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [kioskInfo, setKioskInfo] = useState<{
@@ -23,11 +23,15 @@ function LandingPageContent() {
   const [isNavigating, setIsNavigating] = useState(false);
 
   // Create session in background when kioskId present
+  // Wait for saved state first, so a reload reuses the session instead of
+  // opening a second one. A session for a different kiosk is not reused.
+  const sameKioskSession = !!printJob.backendSessionId && printJob.kioskId === kioskIdParam;
+
   useEffect(() => {
-    if (!kioskIdParam) return;
-    if (printJob.backendSessionId || sessionRequestInFlight.current) {
+    if (!kioskIdParam || !hydrated) return;
+    if (sameKioskSession || sessionRequestInFlight.current) {
       // Session already exists
-      if (printJob.backendSessionId) setSessionReady(true);
+      if (sameKioskSession) setSessionReady(true);
       return;
     }
 
@@ -36,8 +40,9 @@ function LandingPageContent() {
     async function initSession(kioskId: string) {
       try {
         const response = await createSession(kioskId);
+        resetJob();
         setKiosk(kioskId);
-        setBackendSession(response.data.sessionId, response.data.expiresAt);
+        setBackendSession(response.data.sessionId, response.data.expiresAt, response.data.sessionToken);
         setKioskInfo(response.data.kioskInfo);
         setSessionReady(true);
         console.log('✓ Backend session created:', response.data.sessionId);
@@ -49,7 +54,7 @@ function LandingPageContent() {
     }
 
     initSession(kioskIdParam);
-  }, [kioskIdParam, printJob.backendSessionId, setKiosk, setBackendSession]);
+  }, [kioskIdParam, hydrated, sameKioskSession, setKiosk, setBackendSession, resetJob]);
 
   const handleStartPrinting = () => {
     setIsNavigating(true);

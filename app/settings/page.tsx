@@ -43,16 +43,18 @@ function SegmentedRow<T extends string>({ label, value, options, onChange }: Seg
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { printJob, updateSettings } = usePrintJob();
+  const { printJob, updateSettings, hydrated } = usePrintJob();
   const { settings, document, pricing } = printJob;
 
+  const hasDocument = !!printJob.document.documentId;
+
   useEffect(() => {
-    if (!printJob.document.file) {
+    if (hydrated && !hasDocument) {
       router.push('/upload');
     }
-  }, [printJob.document.file, router]);
+  }, [hydrated, hasDocument, router]);
 
-  if (!printJob.document.file) {
+  if (!hasDocument) {
     return null;
   }
 
@@ -76,7 +78,7 @@ export default function SettingsPage() {
               </svg>
               Back
             </button>
-            <SessionTimer startTime={printJob.createdAt} />
+            <SessionTimer />
           </div>
           <ProgressBar currentStep={3} totalSteps={5} />
           <div className="text-center mt-3">

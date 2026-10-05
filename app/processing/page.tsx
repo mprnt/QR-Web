@@ -1,120 +1,144 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { usePrintJob } from '@/context/PrintJobContext';
+import { homeHref, usePrintJob } from '@/context/PrintJobContext';
 import { useEffect, useState } from 'react';
 import { getJobStatus } from '@/lib/api/client';
 import { jobStatusWS } from '@/lib/websocket';
+import {
+  isTerminalStatus,
+  nextPollDelay,
+  POLL_ERRORS_BEFORE_NOTICE,
+  POLL_TIMEOUT_MS,
+  progressFor,
+} from '@/lib/polling';
 
 export default function ProcessingPage() {
   const router = useRouter();
-  const { printJob, updateStatus } = usePrintJob();
+  const { printJob, hydrated, updateStatus } = usePrintJob();
   const [progress, setProgress] = useState(0);
   const [jobStatus, setJobStatus] = useState<string>('queued');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [connectionType, setConnectionType] = useState<'websocket' | 'polling'>('polling');
 
-  useEffect(() => {
-    if (!printJob.document.file || printJob.payment.status !== 'success') {
-      router.push('/');
-      return;
-    }
+  const paid = printJob.payment.status === 'success';
+  const { printJobId } = printJob;
 
-    if (!printJob.printJobId) {
-      setError('Print job ID not found');
-      return;
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!paid || !printJobId) {
+      router.push(homeHref(printJob.kioskId));
     }
+  }, [hydrated, paid, printJobId, printJob.kioskId, router]);
+
+  useEffect(() => {
+    if (!hydrated || !paid || !printJobId) return;
 
     let isActive = true;
-    let pollInterval: NodeJS.Timeout | null = null;
+    let finished = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
     let wsUnsubscribe: (() => void) | null = null;
+    let failures = 0;
+    let lastStatus = 'queued';
+    const startedAt = Date.now();
+
+    const stopAll = () => {
+      finished = true;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+      if (wsUnsubscribe) wsUnsubscribe();
+      wsUnsubscribe = null;
+      jobStatusWS.disconnect();
+    };
 
     const updateJobProgress = (status: string, data?: any) => {
-      if (!isActive) return;
+      if (!isActive || finished) return;
 
+      lastStatus = status;
       setJobStatus(status);
-      setError(null);
+      setNotice(null);
 
-      let newProgress = 0;
-      switch (status) {
-        case 'queued':
-          newProgress = 10;
-          break;
-        case 'assigned':
-          newProgress = 30;
-          break;
-        case 'printing':
-          newProgress = 60 + (data?.printedPages ? Math.min(data.printedPages * 5, 35) : 0);
-          break;
-        case 'completed':
-          newProgress = 100;
-          break;
-        case 'failed':
-          setError(data?.errorMessage || 'Printing failed');
-          return;
-        case 'cancelled':
-          setError('Print job was cancelled');
-          return;
+      if (status === 'failed' || status === 'cancelled') {
+        stopAll();
+        setError(
+          status === 'failed'
+            ? data?.errorMessage || 'Printing failed'
+            : 'Print job was cancelled'
+        );
+        return;
       }
 
-      setProgress(newProgress);
+      setError(null);
+      setProgress(progressFor(status, data?.printedPages));
 
-      if (status === 'completed' && isActive) {
+      if (status === 'completed') {
+        stopAll();
         updateStatus('complete');
-        // Clean up before redirect
-        if (wsUnsubscribe) wsUnsubscribe();
-        if (pollInterval) clearInterval(pollInterval);
-        jobStatusWS.disconnect();
-
         setTimeout(() => {
           router.push('/complete');
         }, 500);
       }
     };
 
-    const initializeWebSocket = async () => {
-      try {
-        await jobStatusWS.subscribe(printJob.printJobId!);
-        setConnectionType('websocket');
-        console.log('✓ WebSocket connected for real-time updates');
-
-        // Listen for status updates
-        wsUnsubscribe = jobStatusWS.onStatusUpdate((status, data) => {
-          updateJobProgress(status, data);
-        });
-      } catch (error) {
-        console.warn('WebSocket connection failed, falling back to polling', error);
-        setConnectionType('polling');
-        initializePolling();
+    const schedulePoll = () => {
+      if (!isActive || finished) return;
+      if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+        stopAll();
+        setError(
+          'This is taking longer than expected. Your payment is safe — please show this screen to the shop staff.'
+        );
+        return;
       }
+      pollTimer = setTimeout(pollJobStatus, nextPollDelay(failures));
     };
 
-    const pollJobStatus = async () => {
+    async function pollJobStatus() {
       try {
-        const status = await getJobStatus(printJob.printJobId!);
+        const status = await getJobStatus(printJobId!);
+        failures = 0;
         updateJobProgress(status.status, status);
       } catch (err: any) {
         if (!isActive) return;
+        failures++;
         console.error('Error polling job status:', err);
-        setError('Failed to get job status: ' + (err.message || 'Unknown error'));
+        if (failures >= POLL_ERRORS_BEFORE_NOTICE) {
+          setNotice('Having trouble reaching the printer. Still trying…');
+        }
+      }
+      if (!isTerminalStatus(lastStatus)) schedulePoll();
+    }
+
+    const initializeWebSocket = async () => {
+      try {
+        await jobStatusWS.subscribe(printJobId);
+        if (!isActive || finished) {
+          jobStatusWS.disconnect();
+          return;
+        }
+        setConnectionType('websocket');
+        wsUnsubscribe = jobStatusWS.onStatusUpdate((status, data) => updateJobProgress(status, data));
+      } catch (err) {
+        if (!isActive || finished) return;
+        console.warn('WebSocket connection failed, falling back to polling', err);
+        setConnectionType('polling');
+        schedulePoll();
       }
     };
 
-    const initializePolling = () => {
-      pollJobStatus();
-      pollInterval = setInterval(pollJobStatus, 2000);
-    };
-
-    // Try WebSocket first, fall back to polling
-    initializeWebSocket();
+    // One poll first: after a reload the job may already be further along (or done).
+    getJobStatus(printJobId)
+      .then((status) => updateJobProgress(status.status, status))
+      .catch((err) => console.warn('Initial status check failed', err))
+      .finally(() => {
+        if (isActive && !finished) initializeWebSocket();
+      });
 
     return () => {
       isActive = false;
-      if (wsUnsubscribe) wsUnsubscribe();
-      if (pollInterval) clearInterval(pollInterval);
-      jobStatusWS.disconnect();
+      stopAll();
     };
-  }, [printJob.document.file, printJob.payment.status, printJob.printJobId, router, updateStatus]);
+  }, [hydrated, paid, printJobId, router, updateStatus]);
 
   const getStatusMessage = () => {
     if (error) return 'Error!';
@@ -153,7 +177,7 @@ export default function ProcessingPage() {
           </h1>
 
           <p className="text-xl text-text-muted mb-8">
-            {error ? error : 'Please wait while we prepare your prints'}
+            {error ? error : notice || 'Please wait while we prepare your prints'}
           </p>
 
           {/* Progress Bar */}
@@ -200,7 +224,7 @@ export default function ProcessingPage() {
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-text-muted">Pages</span>
-                <span className="font-semibold text-text">{printJob.pricing.totalPages}</span>
+                <span className="font-semibold text-text">{printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-text-muted">Kiosk</span>
@@ -220,7 +244,9 @@ export default function ProcessingPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <p className={`text-sm ${error ? 'text-error' : 'text-warning'} text-left`}>
-                {error ? 'An error occurred during printing.' : 'Please stay on this page. Do not close or refresh your browser.'}
+                {error
+                  ? 'An error occurred during printing. Please show this screen to the shop staff.'
+                  : 'You can keep this page open to follow your print. If it reloads, your job is still safe.'}
               </p>
             </div>
           </div>

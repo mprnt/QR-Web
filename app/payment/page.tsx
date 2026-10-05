@@ -4,26 +4,82 @@ import { useRouter } from 'next/navigation';
 import { usePrintJob } from '@/context/PrintJobContext';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SessionTimer } from '@/components/SessionTimer';
-import { useEffect, useState } from 'react';
-import { createPaymentOrder, simulatePaymentSuccess, verifyPayment } from '@/lib/api/client';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  APIError,
+  createPaymentOrder,
+  getPaymentOrderStatus,
+  simulatePaymentSuccess,
+  verifyPayment,
+} from '@/lib/api/client';
+import { chargedAmount, needsJobSync, type PaymentOrder } from '@/lib/jobState';
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { printJob, updatePayment, updateStatus } = usePrintJob();
+  const { printJob, hydrated, updatePayment, updateStatus } = usePrintJob();
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const hasDocument = !!printJob.document.documentId;
+  const paid = printJob.payment.status === 'success';
+  const jobReady = !!printJob.printJobId && !needsJobSync(printJob);
+  const amount = chargedAmount(printJob);
+  const orderId = printJob.payment.order?.orderId;
+
+  const mismatch = !!printJob.payment.amountMismatch;
+
+  /** Money taken, job not queued (409 AMOUNT_MISMATCH): never show "paid", never invite a second payment. */
+  const markMismatch = useCallback(() => {
+    setProcessing(false);
+    updatePayment({ status: 'failed', amountMismatch: true });
+  }, [updatePayment]);
+
+  const markPaid = useCallback(
+    (transactionId: string | undefined) => {
+      updatePayment({ transactionId, status: 'success' });
+      updateStatus('processing');
+      setTimeout(() => router.push('/processing'), 500);
+    },
+    [router, updatePayment, updateStatus]
+  );
+
   useEffect(() => {
-    if (!printJob.document.file) {
+    if (!hydrated) return;
+    if (paid) {
+      router.replace('/processing');
+      return;
+    }
+    if (!hasDocument) {
       router.push('/upload');
       return;
     }
-    if (!printJob.printJobId) {
+    if (!jobReady) {
       router.push('/review');
     }
-  }, [printJob.document.file, printJob.printJobId, router]);
+  }, [hydrated, paid, hasDocument, jobReady, router]);
 
-  if (!printJob.document.file || !printJob.printJobId) {
+  // After a reload or a closed checkout, the payment may have gone through
+  // anyway (the backend webhook captures it). Ask before offering to pay again.
+  useEffect(() => {
+    if (!hydrated || paid || !orderId) return;
+    let cancelled = false;
+    getPaymentOrderStatus(orderId)
+      .then((status) => {
+        if (cancelled) return;
+        if (status.isPaid && status.amountMismatch) markMismatch();
+        else if (status.isPaid) markPaid(printJob.payment.transactionId || printJob.payment.paymentId);
+        // A checkout interrupted by a reload left nothing open; allow paying again.
+        else if (printJob.payment.status === 'processing') updatePayment({ status: 'pending' });
+      })
+      .catch((err) => console.warn('Could not check payment status', err));
+    return () => {
+      cancelled = true;
+    };
+    // Only on load / when the order changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, orderId]);
+
+  if (!hasDocument || !jobReady || amount === null) {
     return null;
   }
 
@@ -61,8 +117,28 @@ export default function PaymentPage() {
     updatePayment({ status: 'processing' });
 
     try {
-      const order = await createPaymentOrder(printJob.printJobId);
-      updatePayment({ orderId: order.orderId });
+      // The backend allows one live order per job, so a retry reuses it.
+      let order: PaymentOrder | undefined = printJob.payment.order;
+      if (order) {
+        const status = await getPaymentOrderStatus(order.orderId);
+        if (status.isPaid && status.amountMismatch) {
+          markMismatch();
+          return;
+        }
+        if (status.isPaid) {
+          markPaid(printJob.payment.transactionId || printJob.payment.paymentId);
+          return;
+        }
+      } else {
+        const created = await createPaymentOrder(printJob.printJobId);
+        order = {
+          keyId: created.keyId,
+          orderId: created.orderId,
+          amount: created.amount,
+          currency: created.currency,
+        };
+      }
+      updatePayment({ orderId: order.orderId, order });
 
       const isRealKey = order.keyId.startsWith('rzp_');
 
@@ -72,19 +148,26 @@ export default function PaymentPage() {
         const payment = await simulatePaymentSuccess(order.orderId);
         updatePayment({ paymentId: payment.paymentId });
 
-        const verification = await verifyPayment({
-          orderId: payment.orderId,
-          paymentId: payment.paymentId,
-          signature: payment.signature,
-        });
+        let verification;
+        try {
+          verification = await verifyPayment({
+            orderId: payment.orderId,
+            paymentId: payment.paymentId,
+            signature: payment.signature,
+          });
+        } catch (verifyError) {
+          if (verifyError instanceof APIError && verifyError.code === 'AMOUNT_MISMATCH') {
+            markMismatch();
+            return;
+          }
+          throw verifyError;
+        }
 
         if (!verification.verified) {
           throw new Error('Payment could not be verified.');
         }
 
-        updatePayment({ transactionId: verification.paymentId, status: 'success' });
-        updateStatus('processing');
-        setTimeout(() => router.push('/processing'), 500);
+        markPaid(verification.paymentId);
         return;
       }
 
@@ -99,8 +182,8 @@ export default function PaymentPage() {
         currency: order.currency,
         order_id: order.orderId,
         name: 'MPrnt',
-        description: `${printJob.pricing.totalPages} page${
-          printJob.pricing.totalPages === 1 ? '' : 's'
+        description: `${printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages} page${
+          (printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages) === 1 ? '' : 's'
         } · ${printJob.settings.colorMode === 'color' ? 'Colour' : 'Black & white'}`,
         theme: {
           // Brand green, so checkout does not look like a different website.
@@ -120,10 +203,26 @@ export default function PaymentPage() {
               throw new Error('Payment could not be verified.');
             }
 
-            updatePayment({ transactionId: verification.paymentId, status: 'success' });
-            updateStatus('processing');
-            setTimeout(() => router.push('/processing'), 500);
+            markPaid(verification.paymentId);
           } catch (verifyError: any) {
+            if (verifyError instanceof APIError && verifyError.code === 'AMOUNT_MISMATCH') {
+              markMismatch();
+              return;
+            }
+            // The webhook may already have captured it; trust the backend over the error.
+            try {
+              const status = await getPaymentOrderStatus(response.razorpay_order_id);
+              if (status.isPaid && status.amountMismatch) {
+                markMismatch();
+                return;
+              }
+              if (status.isPaid) {
+                markPaid(response.razorpay_payment_id);
+                return;
+              }
+            } catch {
+              // Fall through to the "do not pay again" message.
+            }
             // The money has very likely been taken at this point, so the wording
             // must not tell someone their payment failed, and must not invite
             // them to pay a second time.
@@ -187,7 +286,7 @@ export default function PaymentPage() {
               </svg>
               Back
             </button>
-            <SessionTimer startTime={printJob.createdAt} />
+            <SessionTimer holdRedirect />
           </div>
           <ProgressBar currentStep={5} totalSteps={5} />
           <div className="text-center mt-3">
@@ -203,14 +302,25 @@ export default function PaymentPage() {
           {/* Amount */}
           <div className="bg-primary/5 border-2 border-primary/20 rounded-xl p-8 text-center animate-on-scroll">
             <div className="text-sm text-text-muted mb-2">Total Amount</div>
-            <div className="text-5xl font-black text-primary mb-2">₹{printJob.pricing.total}</div>
+            <div className="text-5xl font-black text-primary mb-2">₹{amount}</div>
             <div className="text-sm text-text-muted">
-              {printJob.pricing.totalPages} pages • {printJob.settings.copies}{' '}
+              {printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages} pages • {printJob.settings.copies}{' '}
               {printJob.settings.copies > 1 ? 'copies' : 'copy'}
             </div>
           </div>
 
-          {error && (
+          {mismatch && (
+            <div
+              role="alert"
+              className="bg-error/5 border-2 border-error/20 rounded-xl p-4 animate-on-scroll text-sm text-text"
+            >
+              The amount paid did not match this print job, so it was not sent to the printer. Your
+              payment has been recorded for a refund. Please do not pay again; show this screen at the
+              shop.
+            </div>
+          )}
+
+          {error && !mismatch && (
             <div
               role="alert"
               className="bg-error/5 border-2 border-error/20 rounded-xl p-4 animate-on-scroll"
@@ -249,7 +359,7 @@ export default function PaymentPage() {
                   </span>
                   <span>
                     Tap{' '}
-                    <span className="font-semibold text-text">Pay ₹{printJob.pricing.total}</span> to
+                    <span className="font-semibold text-text">Pay ₹{amount}</span> to
                     open the secure payment window.
                   </span>
                 </li>
@@ -299,8 +409,7 @@ export default function PaymentPage() {
             className="text-center text-sm text-text-muted animate-on-scroll"
             style={{ animationDelay: '0.15s' }}
           >
-            <p>Backend Session: {printJob.backendSessionId || printJob.sessionId}</p>
-            <p className="mt-1">Kiosk: {printJob.kioskId}</p>
+            <p>Kiosk: {printJob.kioskId}</p>
           </div>
         </div>
       </div>
@@ -310,7 +419,7 @@ export default function PaymentPage() {
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handlePayment}
-            disabled={processing}
+            disabled={processing || mismatch}
             className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
           >
             {processing ? (
@@ -334,7 +443,7 @@ export default function PaymentPage() {
               </>
             ) : (
               <>
-                Pay ₹{printJob.pricing.total}
+                Pay ₹{amount}
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"

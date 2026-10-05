@@ -4,23 +4,120 @@ import { useRouter } from 'next/navigation';
 import { usePrintJob } from '@/context/PrintJobContext';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SessionTimer } from '@/components/SessionTimer';
-import { useEffect, useState } from 'react';
-import { createPrintJob, PrintSettings } from '@/lib/api/client';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  APIError,
+  createPrintJob,
+  createSession,
+  PrintSettings,
+  updatePrintJobSettings,
+  uploadDocument,
+} from '@/lib/api/client';
+import { needsJobSync, type JobPricing } from '@/lib/jobState';
+
+function toJobPricing(pricing: { pricePerPage: number; totalPages: number; totalAmount: number }): JobPricing {
+  return {
+    pricePerPage: pricing.pricePerPage,
+    totalPages: pricing.totalPages,
+    totalAmount: pricing.totalAmount,
+  };
+}
 
 export default function ReviewPage() {
   const router = useRouter();
-  const { printJob, setPrintJobId } = usePrintJob();
-  const [isCreating, setIsCreating] = useState(false);
+  const { printJob, hydrated, setPrintJobId, setBackendSession, updateDocument } = usePrintJob();
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [needsReupload, setNeedsReupload] = useState(false);
+  const syncing = useRef(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const hasDocument = !!printJob.document.documentId;
+  const paid = printJob.payment.status === 'success';
 
   useEffect(() => {
-    if (!printJob.document.file) {
-      router.push('/upload');
-    }
-  }, [printJob.document.file, router]);
+    if (!hydrated) return;
+    if (paid) router.replace('/processing');
+    else if (!hasDocument) router.push('/upload');
+  }, [hydrated, hasDocument, paid, router]);
 
-  if (!printJob.document.file) {
+  /**
+   * Make the backend job match what the customer chose, so the price shown
+   * here is the backend's. The backend holds one job per session: settings
+   * changes PATCH it, and once a payment order exists the job is locked, so
+   * the document goes to a fresh session with a new job instead.
+   */
+  const syncJob = useCallback(async () => {
+    if (syncing.current) return;
+    syncing.current = true;
+    setIsSyncing(true);
+    setSyncError(null);
+    setNeedsReupload(false);
+
+    const settings: PrintSettings = {
+      colorMode: printJob.settings.colorMode,
+      copies: printJob.settings.copies,
+      pageRange: printJob.settings.pageRange,
+      customRange: printJob.settings.pageRange === 'custom' ? printJob.settings.customRange : undefined,
+      printSides: printJob.settings.printSides,
+      paperSize: printJob.settings.paperSize,
+      orientation: printJob.settings.orientation,
+    };
+
+    try {
+      const sessionId = printJob.backendSessionId;
+      if (!sessionId) throw new Error('Your session has ended. Please scan the kiosk QR code again.');
+
+      if (!printJob.printJobId) {
+        const job = await createPrintJob(sessionId, settings);
+        setPrintJobId(job.jobId, toJobPricing(job.pricing));
+        return;
+      }
+
+      try {
+        const job = await updatePrintJobSettings(printJob.printJobId, settings);
+        setPrintJobId(job.jobId, toJobPricing(job.pricing));
+        return;
+      } catch (err) {
+        if (!(err instanceof APIError && err.code === 'JOB_SETTINGS_LOCKED')) throw err;
+      }
+
+      // Locked: a payment order already exists for the old settings.
+      const file = printJob.document.file;
+      if (!file) {
+        setNeedsReupload(true);
+        throw new Error('Your print settings changed after payment was started. Please upload your document again.');
+      }
+      const fresh = await createSession(printJob.kioskId);
+      setBackendSession(fresh.data.sessionId, fresh.data.expiresAt, fresh.data.sessionToken);
+      const doc = await uploadDocument(fresh.data.sessionId, file);
+      updateDocument({
+        documentId: doc.documentId,
+        pages: Math.max(1, doc.pageCount || 1),
+        fileType: doc.fileType,
+        processed: doc.processed,
+      });
+      const job = await createPrintJob(fresh.data.sessionId, settings);
+      setPrintJobId(job.jobId, toJobPricing(job.pricing));
+    } catch (error: any) {
+      console.error('Failed to prepare print job:', error);
+      setSyncError(error?.message || 'Could not confirm the price. Please try again.');
+    } finally {
+      syncing.current = false;
+      setIsSyncing(false);
+    }
+  }, [printJob, setPrintJobId, setBackendSession, updateDocument]);
+
+  const shouldSync = hydrated && hasDocument && !paid && needsJobSync(printJob);
+
+  useEffect(() => {
+    if (shouldSync && !syncError) syncJob();
+  }, [shouldSync, syncError, syncJob]);
+
+  if (!hasDocument) {
     return null;
   }
+
+  const jobPricing = needsJobSync(printJob) ? undefined : printJob.jobPricing;
 
   const settingsDisplay = [
     { label: 'Color Mode', value: printJob.settings.colorMode === 'bw' ? 'Black & White' : 'Color' },
@@ -37,44 +134,9 @@ export default function ReviewPage() {
     { label: 'Print Sides', value: printJob.settings.printSides === 'single' ? 'Single-Sided' : 'Double-Sided' },
   ];
 
-  const handleProceedToPayment = async () => {
-    if (isCreating) return;
-
-    // If print job already exists, just navigate
-    if (printJob.printJobId) {
-      router.push('/payment');
-      return;
-    }
-
-    setIsCreating(true);
-
-    try {
-      const sessionId = printJob.backendSessionId || printJob.sessionId;
-
-      const settings: PrintSettings = {
-        colorMode: printJob.settings.colorMode,
-        copies: printJob.settings.copies,
-        pageRange: printJob.settings.pageRange,
-        customRange: printJob.settings.customRange,
-        printSides: printJob.settings.printSides,
-        paperSize: printJob.settings.paperSize,
-        orientation: printJob.settings.orientation,
-      };
-
-      const job = await createPrintJob(sessionId, settings);
-
-      console.log('✓ Print job created:', job.jobId);
-      console.log('  Total amount: ₹', job.pricing.totalAmount);
-      console.log('  Pages:', job.pricing.totalPages);
-
-      setPrintJobId(job.jobId);
-      router.push('/payment');
-    } catch (error: any) {
-      console.error('Failed to create print job:', error);
-      alert('Failed to create print job: ' + (error.message || 'Unknown error'));
-    } finally {
-      setIsCreating(false);
-    }
+  const handleProceedToPayment = () => {
+    if (!jobPricing || isSyncing) return;
+    router.push('/payment');
   };
 
   return (
@@ -92,7 +154,7 @@ export default function ReviewPage() {
               </svg>
               Back
             </button>
-            <SessionTimer startTime={printJob.createdAt} />
+            <SessionTimer />
           </div>
           <ProgressBar currentStep={4} totalSteps={5} />
           <div className="text-center mt-3">
@@ -154,16 +216,41 @@ export default function ReviewPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between py-2">
                 <span className="text-text-muted">Base Price per Page</span>
-                <span className="font-semibold text-text">₹{printJob.pricing.basePrice}</span>
+                <span className="font-semibold text-text">₹{jobPricing ? jobPricing.pricePerPage : printJob.pricing.basePrice}</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <span className="text-text-muted">Total Pages</span>
-                <span className="font-semibold text-text">{printJob.pricing.totalPages}</span>
+                <span className="font-semibold text-text">{jobPricing ? jobPricing.totalPages : printJob.pricing.totalPages}</span>
               </div>
               <div className="flex items-center justify-between py-3 border-t-2 border-border">
-                <span className="text-lg font-bold text-text">Total Cost</span>
-                <span className="text-2xl font-bold text-primary">₹{printJob.pricing.total}</span>
+                {jobPricing ? (
+                  <>
+                    <span className="text-lg font-bold text-text">Total Cost</span>
+                    <span className="text-2xl font-bold text-primary">₹{jobPricing.totalAmount}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg font-bold text-text">
+                      Estimated Cost
+                      <span className="block text-xs font-normal text-text-muted">
+                        {isSyncing ? 'Confirming final price…' : 'Final price not confirmed yet'}
+                      </span>
+                    </span>
+                    <span className="text-2xl font-bold text-text-muted">₹{printJob.pricing.total}</span>
+                  </>
+                )}
               </div>
+              {syncError && (
+                <div role="alert" className="bg-error/5 border border-error/20 rounded-lg p-3 text-sm text-text">
+                  <p>{syncError}</p>
+                  <button
+                    onClick={() => (needsReupload ? router.push('/upload') : setSyncError(null))}
+                    className="mt-2 text-primary font-medium hover:underline"
+                  >
+                    {needsReupload ? 'Upload again' : 'Try again'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -199,20 +286,20 @@ export default function ReviewPage() {
           </div>
           <button
             onClick={handleProceedToPayment}
-            disabled={isCreating}
+            disabled={isSyncing || !jobPricing}
             className="w-full py-4 bg-primary hover:bg-primary-dark text-white rounded-xl font-bold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
           >
-            {isCreating ? (
+            {isSyncing ? (
               <>
                 <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Creating Print Job...
+                Confirming price...
               </>
             ) : (
               <>
-                Proceed to Payment (₹{printJob.pricing.total})
+                {jobPricing ? `Proceed to Payment (₹${jobPricing.totalAmount})` : 'Proceed to Payment'}
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>

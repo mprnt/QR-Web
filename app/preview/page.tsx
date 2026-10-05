@@ -77,7 +77,7 @@ export default function PreviewPage() {
               </svg>
               Back
             </button>
-            <SessionTimer startTime={printJob.createdAt} />
+            <SessionTimer />
           </div>
           <ProgressBar currentStep={2} totalSteps={5} />
           <div className="text-center mt-3">

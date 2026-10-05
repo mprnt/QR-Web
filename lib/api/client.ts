@@ -3,32 +3,28 @@
  * Matches the actual backend implementation at http://localhost:3000/api/v1
  */
 
+import { APIError, handleResponse } from './http';
+import type { ServerSession } from '../jobState';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
-class APIError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number,
-    public code?: string
-  ) {
-    super(message);
-    this.name = 'APIError';
-  }
+export const SESSION_TOKEN_HEADER = 'X-Session-Token';
+
+// The per-session secret the backend returns once from POST /sessions. Every
+// session, document, job, payment and queue call must carry it.
+let sessionToken: string | null = null;
+
+export function setSessionToken(token: string | null | undefined): void {
+  sessionToken = token || null;
 }
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new APIError(
-      data.message || 'An error occurred',
-      response.status,
-      data.code
-    );
-  }
-
-  return data;
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  if (sessionToken) headers[SESSION_TOKEN_HEADER] = sessionToken;
+  return headers;
 }
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 // ==================== SESSION ENDPOINTS ====================
 
@@ -40,6 +36,8 @@ export interface SessionResponse {
   status: string;
   data: {
     sessionId: string;
+    /** Per-session secret, returned only here. Send it as X-Session-Token. */
+    sessionToken?: string;
     expiresAt: string;
     createdAt: string;
     status: string;
@@ -54,58 +52,24 @@ export interface SessionResponse {
 
 export interface GetSessionResponse {
   status: string;
-  data: {
-    session: {
-      sessionId: string;
-      status: string;
-      createdAt: string;
-      expiresAt: string;
-      completedAt: string | null;
-    };
-    kiosk: {
-      kioskId: string;
-      location: string;
-      status: string;
-      capabilities: any;
-    };
-    document: {
-      id: string;
-      filename: string;
-      fileType: string;
-      pageCount: number;
-      fileSizeBytes: number;
-      uploadedAt: string;
-      processed: boolean;
-    } | null;
-    printJob: {
-      id: string;
-      status: string;
-      settings: any;
-      totalAmount: number;
-      createdAt: string;
-    } | null;
-    payment: {
-      transactionId: string;
-      status: string;
-      amount: number;
-      method: string;
-      paidAt: string;
-    } | null;
-  };
+  data: ServerSession;
 }
 
 export async function createSession(kioskId: string = 'KIOSK001'): Promise<SessionResponse> {
   const response = await fetch(`${API_BASE_URL}/sessions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: JSON_HEADERS,
     body: JSON.stringify({ kioskId }),
   });
   return handleResponse<SessionResponse>(response);
 }
 
-export async function getSession(sessionId: string): Promise<GetSessionResponse> {
-  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`);
-  return handleResponse<GetSessionResponse>(response);
+export async function getSession(sessionId: string): Promise<GetSessionResponse['data']> {
+  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+    headers: authHeaders(),
+  });
+  const result = await handleResponse<GetSessionResponse>(response);
+  return result.data;
 }
 
 // ==================== DOCUMENT ENDPOINTS ====================
@@ -154,7 +118,7 @@ export async function uploadDocument(
       } else {
         try {
           const error = JSON.parse(xhr.responseText);
-          reject(new APIError(error.message || 'Upload failed', xhr.status));
+          reject(new APIError(error.message || 'Upload failed', xhr.status, error.code));
         } catch (err) {
           reject(new APIError('Upload failed', xhr.status));
         }
@@ -166,6 +130,9 @@ export async function uploadDocument(
     });
 
     xhr.open('POST', `${API_BASE_URL}/sessions/${sessionId}/documents`);
+    for (const [name, value] of Object.entries(authHeaders())) {
+      xhr.setRequestHeader(name, value);
+    }
     xhr.send(formData);
   });
 }
@@ -223,16 +190,24 @@ export async function createPrintJob(
 ): Promise<CreatePrintJobResponse['data']> {
   const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}/print-jobs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(JSON_HEADERS),
     body: JSON.stringify(settings),
   });
   const result = await handleResponse<CreatePrintJobResponse>(response);
   return result.data;
 }
 
-export async function getPrintJob(jobId: string) {
-  const response = await fetch(`${API_BASE_URL}/print-jobs/${jobId}`);
-  return handleResponse(response);
+export async function updatePrintJobSettings(
+  jobId: string,
+  settings: PrintSettings
+): Promise<CreatePrintJobResponse['data']> {
+  const response = await fetch(`${API_BASE_URL}/print-jobs/${jobId}/settings`, {
+    method: 'PATCH',
+    headers: authHeaders(JSON_HEADERS),
+    body: JSON.stringify(settings),
+  });
+  const result = await handleResponse<CreatePrintJobResponse>(response);
+  return result.data;
 }
 
 // ==================== PAYMENT ENDPOINTS ====================
@@ -256,7 +231,7 @@ export async function createPaymentOrder(
 ): Promise<CreatePaymentOrderResponse['data']> {
   const response = await fetch(`${API_BASE_URL}/print-jobs/${jobId}/payment/order`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(JSON_HEADERS),
   });
   const result = await handleResponse<CreatePaymentOrderResponse>(response);
   return result.data;
@@ -278,7 +253,7 @@ export async function simulatePaymentSuccess(
 ): Promise<SimulatePaymentSuccessResponse['data']> {
   const response = await fetch(`${API_BASE_URL}/payment/mock/simulate-success`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(JSON_HEADERS),
     body: JSON.stringify({ orderId }),
   });
   const result = await handleResponse<SimulatePaymentSuccessResponse>(response);
@@ -311,10 +286,35 @@ export async function verifyPayment(
 ): Promise<VerifyPaymentResponse['data']> {
   const response = await fetch(`${API_BASE_URL}/payment/verify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(JSON_HEADERS),
     body: JSON.stringify(request),
   });
   const result = await handleResponse<VerifyPaymentResponse>(response);
+  return result.data;
+}
+
+export interface PaymentOrderStatusResponse {
+  status: string;
+  data: {
+    orderId: string;
+    amount: number;
+    currency: string;
+    status: string;
+    createdAt: string;
+    isPaid: boolean;
+    /** isPaid, but the amount did not match the job, so it was not queued. */
+    amountMismatch?: boolean;
+  };
+}
+
+/** Whether an order was captured, e.g. by the webhook while the phone was away. */
+export async function getPaymentOrderStatus(
+  orderId: string
+): Promise<PaymentOrderStatusResponse['data']> {
+  const response = await fetch(`${API_BASE_URL}/payment/order/${orderId}/status`, {
+    headers: authHeaders(),
+  });
+  const result = await handleResponse<PaymentOrderStatusResponse>(response);
   return result.data;
 }
 
@@ -334,7 +334,9 @@ export interface GetJobStatusResponse {
 }
 
 export async function getJobStatus(jobId: string): Promise<GetJobStatusResponse['data']> {
-  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}`);
+  const response = await fetch(`${API_BASE_URL}/queue/jobs/${jobId}`, {
+    headers: authHeaders(),
+  });
   const result = await handleResponse<GetJobStatusResponse>(response);
   return result.data;
 }
@@ -342,8 +344,7 @@ export async function getJobStatus(jobId: string): Promise<GetJobStatusResponse[
 // ==================== KIOSK ENDPOINTS ====================
 
 export interface Kiosk {
-  id: string;
-  kiosk_id: string;
+  kioskId: string;
   name: string;
   location: string;
   status: 'active' | 'inactive' | 'maintenance' | 'offline';
@@ -352,9 +353,6 @@ export interface Kiosk {
     supportsDoubleSided?: boolean;
     paperSizes?: string[];
   };
-  printer_status?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface ListKiosksResponse {

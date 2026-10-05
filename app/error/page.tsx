@@ -1,13 +1,13 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { usePrintJob } from '@/context/PrintJobContext';
+import { homeHref, usePrintJob } from '@/context/PrintJobContext';
 import { Suspense } from 'react';
 
 function ErrorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { resetJob } = usePrintJob();
+  const { printJob, resetJob } = usePrintJob();
 
   const reason = searchParams.get('reason') || 'unknown';
 
@@ -74,8 +74,9 @@ function ErrorContent() {
   const errorDetails = getErrorDetails();
 
   const handleStartOver = () => {
+    const href = homeHref(printJob.kioskId);
     resetJob();
-    router.push('/');
+    router.push(href);
   };
 
   const handleGetHelp = () => {
