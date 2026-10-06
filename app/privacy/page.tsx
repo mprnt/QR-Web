@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { LegalDocument } from '@/components/LegalDocument';
-import { TERMS } from '@/lib/legal';
+import { PRIVACY_POLICY } from '@/lib/legal';
 
-export default function TermsPage() {
+export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
@@ -17,19 +17,19 @@ export default function TermsPage() {
             </svg>
             Back
           </Link>
-          <h1 className="text-lg font-bold text-text flex-1 text-center pr-12">Terms &amp; Conditions</h1>
+          <h1 className="text-lg font-bold text-text flex-1 text-center pr-12">Privacy Policy</h1>
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-2xl mx-auto p-6 pb-16 animate-on-scroll">
-        <LegalDocument doc={TERMS} />
+        <LegalDocument doc={PRIVACY_POLICY} />
 
         <Link
-          href="/privacy"
+          href="/terms"
           className="mt-10 flex items-center justify-between rounded-xl border border-border p-4 font-medium text-text hover:border-primary transition-colors"
         >
-          Privacy Policy
+          Terms &amp; Conditions
           <svg className="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>

@@ -97,6 +97,10 @@ function LandingPageContent() {
             <Link href="/terms" className="text-sm text-text-muted hover:text-primary transition-colors underline underline-offset-2">
               Terms & Conditions
             </Link>
+            <span className="mx-2 text-text-muted">·</span>
+            <Link href="/privacy" className="text-sm text-text-muted hover:text-primary transition-colors underline underline-offset-2">
+              Privacy Policy
+            </Link>
           </div>
         </div>
       </div>
@@ -237,6 +241,10 @@ function LandingPageContent() {
             By continuing, you agree to our{' '}
             <Link href="/terms" className="text-primary hover:underline underline-offset-2 font-medium">
               Terms & Conditions
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy" className="text-primary hover:underline underline-offset-2 font-medium">
+              Privacy Policy
             </Link>
           </p>
         </div>

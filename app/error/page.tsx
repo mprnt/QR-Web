@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import { SUPPORT } from '@/lib/support';
 import { homeHref, usePrintJob } from '@/context/PrintJobContext';
 import { Suspense } from 'react';
 
@@ -80,7 +81,7 @@ function ErrorContent() {
   };
 
   const handleGetHelp = () => {
-    alert('Please contact the kiosk support team or scan the help QR code on the machine.');
+    window.location.href = `tel:${SUPPORT.phone.tel}`;
   };
 
   return (
@@ -114,8 +115,22 @@ function ErrorContent() {
               </div>
               <div className="flex-1 text-left">
                 <h3 className="font-semibold text-text mb-1">Need Help?</h3>
+                <p className="text-sm text-text-muted mb-3">
+                  We&apos;re here to assist you with your printing order.
+                </p>
+                <p className="text-sm font-medium text-text">{SUPPORT.product}</p>
+                <p className="text-sm text-text-muted mb-2">Operated by {SUPPORT.operator}</p>
                 <p className="text-sm text-text-muted">
-                  If you continue to experience issues, please contact our support team or ask for assistance from nearby staff.
+                  📧 Email:{' '}
+                  <a href={`mailto:${SUPPORT.email}`} className="text-primary underline-offset-2 hover:underline">
+                    {SUPPORT.email}
+                  </a>
+                </p>
+                <p className="text-sm text-text-muted">
+                  📞 Customer Support:{' '}
+                  <a href={`tel:${SUPPORT.phone.tel}`} className="text-primary underline-offset-2 hover:underline whitespace-nowrap">
+                    {SUPPORT.phone.display}
+                  </a>
                 </p>
               </div>
             </div>
