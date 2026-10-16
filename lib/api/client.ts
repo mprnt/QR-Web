@@ -4,7 +4,8 @@
  */
 
 import { APIError, handleResponse } from './http';
-import type { Rates, ServerSession } from '../jobState';
+import { STORAGE_KEY, type Rates, type ServerSession } from '../jobState';
+import { resolveSessionToken } from './sessionToken';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
 
@@ -12,15 +13,27 @@ export const SESSION_TOKEN_HEADER = 'X-Session-Token';
 
 // The per-session secret the backend returns once from POST /sessions. Every
 // session, document, job, payment and queue call must carry it.
-let sessionToken: string | null = null;
+// `undefined` means "not set yet": then the token is read from the saved job,
+// so a request made before the page has restored its state still carries it.
+// An explicit `null` (after a reset) means no token, even if storage has one.
+let sessionToken: string | null | undefined = undefined;
 
 export function setSessionToken(token: string | null | undefined): void {
   sessionToken = token || null;
 }
 
+function savedJobJson(): string | null {
+  try {
+    return window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = { ...extra };
-  if (sessionToken) headers[SESSION_TOKEN_HEADER] = sessionToken;
+  const token = resolveSessionToken(sessionToken, savedJobJson());
+  if (token) headers[SESSION_TOKEN_HEADER] = token;
   return headers;
 }
 
@@ -55,7 +68,7 @@ export interface GetSessionResponse {
   data: ServerSession;
 }
 
-export async function createSession(kioskId: string = 'KIOSK001'): Promise<SessionResponse> {
+export async function createSession(kioskId: string): Promise<SessionResponse> {
   const response = await fetch(`${API_BASE_URL}/sessions`, {
     method: 'POST',
     headers: JSON_HEADERS,

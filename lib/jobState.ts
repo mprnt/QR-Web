@@ -90,11 +90,11 @@ export interface PrintJob {
   expiresAt?: string;
 }
 
-export const DEFAULT_KIOSK_ID = 'KIOSK001';
-
 export const defaultPrintJob: PrintJob = {
   sessionId: '',
-  kioskId: DEFAULT_KIOSK_ID,
+  // Empty until a kiosk is scanned. Never assume a code: an unknown code is
+  // refused by the backend and the customer must see that, not a silent default.
+  kioskId: '',
   document: {
     file: null,
     name: '',

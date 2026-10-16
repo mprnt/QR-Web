@@ -18,6 +18,7 @@ import {
   type Settings,
 } from '@/lib/jobState';
 import { getKioskRates, getSession, setSessionToken } from '@/lib/api/client';
+import { APIError } from '@/lib/api/http';
 
 export type { Document, JobPricing, Payment, Pricing, PrintJob, Settings } from '@/lib/jobState';
 
@@ -39,9 +40,27 @@ interface PrintJobContextType {
 
 const PrintJobContext = createContext<PrintJobContextType | undefined>(undefined);
 
+// localStorage, not sessionStorage: Android discards a backgrounded tab, which
+// clears sessionStorage. Saved state must outlive that, or a customer who
+// switches apps mid-upload or mid-payment loses their place.
+// Saved state is kept for an hour past the session window: enough to come back
+// from an app switch or a payment app, not for a finished job to linger on the phone.
+const STALE_AFTER_EXPIRY_MS = 60 * 60_000;
+
+function isStale(job: PrintJob): boolean {
+  if (job.status === 'complete') return true;
+  const expiresAt = job.expiresAt ? Date.parse(job.expiresAt) : NaN;
+  return Number.isNaN(expiresAt) || Date.now() > expiresAt + STALE_AFTER_EXPIRY_MS;
+}
+
 function readStored(): PrintJob | null {
   try {
-    return fromStored(window.sessionStorage.getItem(STORAGE_KEY));
+    const job = fromStored(window.localStorage.getItem(STORAGE_KEY));
+    if (job && isStale(job)) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return job;
   } catch {
     return null;
   }
@@ -50,13 +69,24 @@ function readStored(): PrintJob | null {
 function writeStored(job: PrintJob) {
   try {
     if (job.backendSessionId) {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStored(job)));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toStored(job)));
     } else {
-      window.sessionStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
     }
   } catch {
     // Private mode or storage full: the app still works, it just cannot survive a reload.
   }
+}
+
+/** The backend no longer has this session for us: 404/410 expired, 401/403 bad token. */
+function isSessionGone(err: unknown): boolean {
+  if (!(err instanceof APIError)) return false;
+  return (
+    err.statusCode === 404 ||
+    err.statusCode === 410 ||
+    err.code === 'SESSION_TOKEN_INVALID' ||
+    err.code === 'SESSION_TOKEN_REQUIRED'
+  );
 }
 
 export function PrintJobProvider({ children }: { children: ReactNode }) {
@@ -80,7 +110,11 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
     if (stored?.backendSessionId) {
       getSession(stored.backendSessionId)
         .then((server) => setPrintJob((prev) => mergeServerSession(prev, server)))
-        .catch((err) => console.warn('Could not refresh session from backend', err));
+        .catch((err) => {
+          console.warn('Could not refresh session from backend', err);
+          // Keeping a dead session only leads to a loop of failing requests.
+          if (isSessionGone(err)) resetJobRef.current();
+        });
     }
   }, []);
 
@@ -181,6 +215,10 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
     setSessionToken(null);
     setPrintJob(prev => ({ ...defaultPrintJob, kioskId: prev.kioskId, rates: prev.rates }));
   }, []);
+
+  // The restore effect runs before resetJob is defined; it calls through this ref.
+  const resetJobRef = useRef(resetJob);
+  resetJobRef.current = resetJob;
 
   const setKiosk = useCallback((kioskId: string) => {
     setPrintJob(prev => ({
