@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { usePrintJob } from '@/context/PrintJobContext';
 import { useEffect, useRef, useState, Suspense } from 'react';
 import { createSession } from '@/lib/api/client';
+import { APIError } from '@/lib/api/http';
 import Link from 'next/link';
 
 function LandingPageContent() {
@@ -20,6 +21,10 @@ function LandingPageContent() {
     status: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A bad kiosk code will not work on retry, so only other failures offer one.
+  const [kioskUnknown, setKioskUnknown] = useState(false);
+  // Bumped by "Try Again" to re-run the session request without reloading the page.
+  const [attempt, setAttempt] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
 
   // Create session in background when kioskId present
@@ -46,15 +51,23 @@ function LandingPageContent() {
         setKioskInfo(response.data.kioskInfo);
         setSessionReady(true);
         console.log('✓ Backend session created:', response.data.sessionId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Failed to create session:', err);
         sessionRequestInFlight.current = false;
-        setError(err.message || 'Failed to connect to printer. Please try scanning again.');
+        const unknown = err instanceof APIError && err.statusCode === 404;
+        setKioskUnknown(unknown);
+        setError(
+          unknown
+            ? 'This kiosk code is not recognised. Please scan the QR code on the kiosk again.'
+            : err instanceof Error && err.message
+              ? err.message
+              : 'Failed to connect to printer. Please try scanning again.',
+        );
       }
     }
 
     initSession(kioskIdParam);
-  }, [kioskIdParam, hydrated, sameKioskSession, setKiosk, setBackendSession, resetJob]);
+  }, [kioskIdParam, hydrated, sameKioskSession, attempt, setKiosk, setBackendSession, resetJob]);
 
   const handleStartPrinting = () => {
     setIsNavigating(true);
@@ -119,12 +132,18 @@ function LandingPageContent() {
           </div>
           <h1 className="text-2xl font-black text-text mb-3">Connection Failed</h1>
           <p className="text-text-muted mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold transition-all"
-          >
-            Try Again
-          </button>
+          {!kioskUnknown && (
+            <button
+              onClick={() => {
+                setError(null);
+                sessionRequestInFlight.current = false;
+                setAttempt((n) => n + 1);
+              }}
+              className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold transition-all"
+            >
+              Try Again
+            </button>
+          )}
         </div>
       </div>
     );
