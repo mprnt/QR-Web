@@ -133,8 +133,11 @@ export function PrintJobProvider({ children }: { children: ReactNode }) {
     if (hydrated) writeStored(printJob);
   }, [hydrated, printJob]);
 
+  // Only a real token is pushed. An undefined token (the default job, before
+  // restore) must leave the saved-token fallback in place: `null` means
+  // "explicitly no token", and would silently stop every status request.
   useEffect(() => {
-    setSessionToken(printJob.sessionToken);
+    if (printJob.sessionToken !== undefined) setSessionToken(printJob.sessionToken);
   }, [printJob.sessionToken]);
 
   // Prices are set per kiosk from the admin dashboard, so fetch them rather
