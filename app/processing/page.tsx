@@ -17,7 +17,9 @@ export default function ProcessingPage() {
   const router = useRouter();
   const { printJob, hydrated, updateStatus } = usePrintJob();
   const [progress, setProgress] = useState(0);
-  const [jobStatus, setJobStatus] = useState<string>('queued');
+  // null until the first real status arrives. Defaulting to 'queued' showed
+  // "Waiting in queue" for a job that had already failed.
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [connectionType, setConnectionType] = useState<'websocket' | 'polling'>('polling');
@@ -120,9 +122,8 @@ export default function ProcessingPage() {
         wsUnsubscribe = jobStatusWS.onStatusUpdate((status, data) => updateJobProgress(status, data));
       } catch (err) {
         if (!isActive || finished) return;
-        console.warn('WebSocket connection failed, falling back to polling', err);
+        console.warn('WebSocket connection failed; polling continues', err);
         setConnectionType('polling');
-        schedulePoll();
       }
     };
 
@@ -131,7 +132,13 @@ export default function ProcessingPage() {
       .then((status) => updateJobProgress(status.status, status))
       .catch((err) => console.warn('Initial status check failed', err))
       .finally(() => {
-        if (isActive && !finished) initializeWebSocket();
+        // Polling always runs. The live connection only makes updates faster: a
+        // failure pushed by the server can be missed, and must not leave the
+        // screen stuck on the last status it happened to see.
+        if (isActive && !finished) {
+          schedulePoll();
+          initializeWebSocket();
+        }
       });
 
     return () => {
@@ -142,6 +149,7 @@ export default function ProcessingPage() {
 
   const getStatusMessage = () => {
     if (error) return 'Error!';
+    if (jobStatus === null) return 'Checking your print…';
     switch (jobStatus) {
       case 'queued':
         return 'Waiting in queue...';
@@ -198,7 +206,7 @@ export default function ProcessingPage() {
             <div className="space-y-3 text-left">
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-text-muted">Status</span>
-                <span className="font-semibold text-text capitalize">{jobStatus}</span>
+                <span className="font-semibold text-text capitalize">{jobStatus ?? 'checking'}</span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-border">
                 <span className="text-text-muted">Connection</span>

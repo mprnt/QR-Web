@@ -59,9 +59,11 @@ function LandingPageContent() {
         setError(
           unknown
             ? 'This kiosk code is not recognised. Please scan the QR code on the kiosk again.'
-            : err instanceof Error && err.message
-              ? err.message
-              : 'Failed to connect to printer. Please try scanning again.',
+            : err instanceof APIError && err.code === 'PRINTER_OFFLINE'
+              ? "This kiosk's printer is offline right now, so you can't print here. Please try again later or use another kiosk."
+              : err instanceof Error && err.message
+                ? err.message
+                : 'Failed to connect to printer. Please try scanning again.',
         );
       }
     }
