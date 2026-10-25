@@ -117,7 +117,7 @@ export default function CompletePage() {
           {/* Footer Info */}
           <div className="mt-8 space-y-2 text-sm text-text-muted animate-on-scroll" style={{ animationDelay: '0.4s' }}>
             {printJob.payment.transactionId && <p>Transaction ID: {printJob.payment.transactionId}</p>}
-            <p>Thank you for using MPrnt!</p>
+            <p>Thank you for using MPRNT!</p>
           </div>
 
           {/* Rating/Feedback Section */}

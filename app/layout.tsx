@@ -3,7 +3,7 @@ import { PrintJobProvider } from "@/context/PrintJobContext";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MPrnt - Print Now",
+  title: "MPRNT - Print Now",
   description: "Quick self-service printing from your phone",
 };
 

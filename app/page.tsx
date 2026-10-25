@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, Suspense } from 'react';
 import { createSession } from '@/lib/api/client';
 import { APIError } from '@/lib/api/http';
 import Link from 'next/link';
+import { MprntLogo } from '@/components/MprntLogo';
 
 function LandingPageContent() {
   const router = useRouter();
@@ -83,14 +84,7 @@ function LandingPageContent() {
         <div className="max-w-md w-full text-center">
           {/* Brand */}
           <div className="mb-10 animate-on-scroll">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-primary/10 rounded-2xl mb-6">
-              <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-            </div>
-            <h1 className="text-4xl font-black text-text tracking-tight">
-              M<span className="text-primary">Prnt</span>
-            </h1>
+            <MprntLogo variant="full" className="mx-auto mb-6 h-28 w-auto text-primary" />
             <p className="text-text-muted mt-2 text-lg">Self-service printing, simplified.</p>
           </div>
 
@@ -103,7 +97,7 @@ function LandingPageContent() {
             </div>
             <h2 className="text-xl font-bold text-text mb-2">Scan to Start</h2>
             <p className="text-text-muted">
-              Scan the QR code on any MPrnt kiosk to begin printing your documents instantly.
+              Scan the QR code on any MPRNT kiosk to begin printing your documents instantly.
             </p>
           </div>
 
@@ -159,18 +153,13 @@ function LandingPageContent() {
         <div className="max-w-md w-full text-center">
           {/* Brand Logo */}
           <div className="mb-8 animate-on-scroll">
-            <div className="inline-flex items-center justify-center w-24 h-24 bg-primary/10 rounded-3xl mb-5 relative">
-              <svg className="w-12 h-12 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
+            <div className="relative mx-auto mb-5 inline-block">
+              <MprntLogo variant="full" className="h-32 w-auto text-primary" />
               {/* Status dot */}
               {sessionReady && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-success rounded-full border-2 border-surface" />
               )}
             </div>
-            <h1 className="text-5xl font-black text-text tracking-tight">
-              M<span className="text-primary">Prnt</span>
-            </h1>
             <p className="text-text-muted mt-2 text-lg">Print from your phone in seconds</p>
           </div>
 

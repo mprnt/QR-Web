@@ -212,7 +212,7 @@ export default function PaymentPage() {
         amount: Math.round(order.amount * 100),
         currency: order.currency,
         order_id: order.orderId,
-        name: 'MPrnt',
+        name: 'MPRNT',
         description: `${printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages} page${
           (printJob.jobPricing?.totalPages ?? printJob.pricing.totalPages) === 1 ? '' : 's'
         } · ${printJob.settings.colorMode === 'color' ? 'Colour' : 'Black & white'}`,

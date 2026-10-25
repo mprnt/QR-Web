@@ -1,5 +1,5 @@
 /**
- * MPrnt Backend API Client
+ * MPRNT Backend API Client
  * Matches the actual backend implementation at http://localhost:3000/api/v1
  */
 
