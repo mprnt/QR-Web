@@ -1,6 +1,6 @@
-# MPrnt Frontend - Backend Integration
+# MPRNT Frontend - Backend Integration
 
-Complete integration with MPrnt backend API (http://localhost:3000/api/v1)
+Complete integration with MPRNT backend API (http://localhost:3000/api/v1)
 
 ## ✅ Integrated Flow
 
