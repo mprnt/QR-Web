@@ -9,8 +9,12 @@ export const TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'fai
 
 export const POLL_BASE_MS = 2000;
 export const POLL_MAX_MS = 30000;
-/** Give up waiting and show guidance after this long without a terminal status. */
-export const POLL_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * After this long without a terminal status the customer is told the print is
+ * slow (amber, not an error), and polling slows to POLL_MAX_MS. It never gives
+ * up: a job still printing after 10 minutes is not a failed job.
+ */
+export const POLL_SLOW_AFTER_MS = 10 * 60 * 1000;
 /** Consecutive failed polls before the customer is told something is wrong. */
 export const POLL_ERRORS_BEFORE_NOTICE = 3;
 

@@ -1338,68 +1338,66 @@ export const TERMS: LegalDocument = {
       ]
     },
     {
-      "heading": "15. Refunds",
-      "blocks": [
-        {
-          "type": "p",
-          "text": "Refunds may be considered in circumstances such as:"
-        },
-        {
-          "type": "ul",
-          "items": [
-            "Payment being successfully deducted but the order not being created;",
-            "Duplicate payment for the same order;",
-            "Printing being unsuccessful due to a technical issue attributable to the MPRNT system or Partner Print Shop;",
-            "An order being cancelled before printing where a refund is applicable; or",
-            "Other circumstances determined by MPRNT under the applicable refund policy."
+          "heading": "15. Refunds",
+          "blocks": [
+                {
+                      "type": "p",
+                      "text": "You get a full refund for your job if any of these happen:"
+                },
+                {
+                      "type": "ul",
+                      "items": [
+                            "Your payment went through but the job was not created.",
+                            "You paid twice for the same job.",
+                            "The amount you paid does not match the price of the job.",
+                            "Your job was paid but did not print within 15 minutes of payment.",
+                            "The printer could not print your job after 3 tries."
+                      ]
+                },
+                {
+                      "type": "p",
+                      "text": "A refund always covers the whole job, not part of it."
+                },
+                {
+                      "type": "p",
+                      "text": "You do not get a refund if the job has already printed, or if it printed the way you chose. That includes the wrong copies, colour, pages, sides, paper size or orientation, or a file you did not mean to print. Check your file and settings before you pay."
+                },
+                {
+                      "type": "p",
+                      "text": "Refunds go back to the payment method you used. The shop owner or MPRNT issues the refund. Your bank may take several working days to show the money."
+                },
+                {
+                      "type": "p",
+                      "text": "To ask for a refund, show your payment receipt or Razorpay payment ID to shop staff."
+                }
           ]
-        },
-        {
-          "type": "p",
-          "text": "Refund eligibility may depend on the nature of the issue and whether printing has already been completed."
-        },
-        {
-          "type": "p",
-          "text": "Users may be required to provide their order/reference number and relevant payment details when raising a refund request."
-        },
-        {
-          "type": "p",
-          "text": "Refunds, where approved, may take additional time to reflect depending on the payment provider or financial institution."
-        }
-      ]
     },
     {
-      "heading": "16. Failed, Incorrect, or Poor-Quality Printing",
-      "blocks": [
-        {
-          "type": "p",
-          "text": "If a print order is not completed correctly, the User should report the issue to the Partner Print Shop or through the available MPRNT support channel as soon as reasonably possible."
-        },
-        {
-          "type": "p",
-          "text": "Issues may include:"
-        },
-        {
-          "type": "ul",
-          "items": [
-            "Missing pages;",
-            "Incorrect number of copies;",
-            "Blank or incomplete pages;",
-            "Printing in an incorrect colour mode;",
-            "Incorrect paper size;",
-            "Significant printing defects; or",
-            "Printing failure due to technical problems."
+          "heading": "16. When Something Goes Wrong",
+          "blocks": [
+                {
+                      "type": "p",
+                      "text": "Here is what happens in each case. Keep the message on your screen and show it to shop staff if you need help."
+                },
+                {
+                      "type": "ul",
+                      "items": [
+                            "Your time ran out before you paid: nothing is charged. Your file is deleted. Scan the QR code again to start over.",
+                            "Your file was not accepted: nothing is charged. Use a PDF, PNG or JPEG file under 10 MB and upload it again.",
+                            "Your payment did not go through: no job starts and nothing is printed. Your settings unlock, so you can try to pay again while your session is still active.",
+                            "Money was taken but nothing printed: the payment is recorded automatically, even if your browser closes. If the job does not print, it is refunded under section 15.",
+                            "The printer is offline, out of paper or ink, or jammed after you paid: the job waits, and we try up to 3 times within 15 minutes of payment. If it still has not printed, it is marked for a refund.",
+                            "Printing stopped partway through: the job is tried again. If it fails after 3 tries, you get a full refund, even if some pages came out.",
+                            "Your session ended after you paid: your job is kept and still prints. Your file is kept until the job is done.",
+                            "The printout is not what you chose: this is not a refund case. Check your file and settings before you pay.",
+                            "Print quality is poor, or pages are missing or blank: tell shop staff as soon as possible. They will review the job and reprint it or refund it."
+                      ]
+                },
+                {
+                      "type": "p",
+                      "text": "Minor differences in colour, paper look or print quality that come from normal printing (for example paper or printer differences) may not count as a fault."
+                }
           ]
-        },
-        {
-          "type": "p",
-          "text": "MPRNT may review the order details and circumstances before determining whether a reprint, partial refund, or other resolution is applicable."
-        },
-        {
-          "type": "p",
-          "text": "Minor differences in colour, paper appearance, or print quality caused by printer capabilities, paper quality, or normal printing variations may not qualify as a printing defect."
-        }
-      ]
     },
     {
       "heading": "17. User Responsibilities",
